@@ -29,6 +29,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Import our pipeline functions
 from src.data.preparation import create_dataset
 from src.data.preprocessor import prepare_ml_dataset, prepare_deepsets_data
+from src.data.loader import extract_parameters
 from src.training.experiments import train_individual_models, train_leave_one_out_models
 from src.evaluation import evaluate_cross_model_performance
 from src.visualization import (
@@ -38,31 +39,9 @@ from src.visualization import (
 from src.utils import save_results
 
 
-def extract_physics_parameters(filename: str) -> Dict[str, Any]:
-    """Extract physics parameters from filename."""
-    import re
-    
-    base_name = os.path.basename(filename).replace('.h5', '')
-    
-    # Extract parameters using regex
-    mDark_match = re.search(r'mDark-([0-9.]+)', base_name)
-    rinv_match = re.search(r'rinv-([0-9.]+)', base_name) 
-    alpha_match = re.search(r'alpha-([a-z]+)', base_name)
-    
-    if all([mDark_match, rinv_match, alpha_match]):
-        return {
-            'mDark': float(mDark_match.group(1)),
-            'rinv': float(rinv_match.group(1)),
-            'alpha': alpha_match.group(1),
-            'base_name': base_name
-        }
-    
-    return {'base_name': base_name}
-
-
 def match_model_to_dataset(model_name: str, available_datasets: List[str]) -> str:
     """Robustly match model to its corresponding test dataset."""
-    model_params = extract_physics_parameters(model_name)
+    model_params = extract_parameters(model_name)
     
     # If no parameters extracted, use first dataset
     if 'mDark' not in model_params:
@@ -70,7 +49,7 @@ def match_model_to_dataset(model_name: str, available_datasets: List[str]) -> st
     
     # Look for exact parameter match
     for ds_name in available_datasets:
-        ds_params = extract_physics_parameters(ds_name)
+        ds_params = extract_parameters(ds_name)
         
         if ('mDark' in ds_params and 
             ds_params['mDark'] == model_params['mDark'] and
@@ -179,9 +158,10 @@ def run_sensitivity_analysis(
         print(f"  Standard Model file: {os.path.basename(sm_file)}")
         print(f"  Dark sector files ({len(dark_files)}):")
         for f in dark_files:
-            params = extract_physics_parameters(f)
+            params = extract_parameters(f)
             if 'mDark' in params:
-                print(f"    - {params['base_name']} (mDark={params['mDark']}, rinv={params['rinv']}, alpha={params['alpha']})")
+                base_name = os.path.basename(f).replace('.h5', '')
+                print(f"    - {base_name} (mDark={params['mDark']}, rinv={params['rinv']}, alpha={params['alpha']})")
             else:
                 print(f"    - {os.path.basename(f)}")
     
