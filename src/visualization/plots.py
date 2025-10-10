@@ -85,8 +85,7 @@ def plot_combined_roc_curves(
     all_results: Dict[str, Any],
     title: str = 'Comparison of ROC Curves',
     save_path: str = None,
-    figsize: Tuple[int, int] = (12, 10),
-    sm_accuracy: float = 0.79  # Add SM accuracy parameter to display in legend
+    figsize: Tuple[int, int] = (12, 10)
 ) -> plt.Figure:
     """
     Plot ROC curves for multiple models on one figure with consistent styling.
@@ -101,8 +100,6 @@ def plot_combined_roc_curves(
         Path to save the figure
     figsize : tuple
         Figure size
-    sm_accuracy : float
-        Standard Model accuracy to display in legend
         
     Returns:
     --------
@@ -140,7 +137,7 @@ def plot_combined_roc_curves(
             color=style["color"],
             linestyle=style["linestyle"],
             linewidth=style["linewidth"],
-            label=f'Tested on {display_name} (AUC = {roc_auc:.4f}) (SM accuracy: {sm_accuracy:.2f})'
+            label=f'Tested on {display_name} (AUC = {roc_auc:.4f})'
         )
     
     # Plot diagonal line (random classifier)
@@ -171,8 +168,7 @@ def plot_cross_model_roc_curves(
     model_name: str,
     title: str = None,
     save_path: str = None,
-    figsize: Tuple[int, int] = (12, 10),
-    sm_accuracy: float = 0.79  # Add SM accuracy parameter
+    figsize: Tuple[int, int] = (12, 10)
 ) -> plt.Figure:
     """
     Plot ROC curves for one model evaluated on multiple datasets with consistent styling.
@@ -189,8 +185,6 @@ def plot_cross_model_roc_curves(
         Path to save the figure
     figsize : tuple
         Figure size
-    sm_accuracy : float
-        Standard Model accuracy to display in legend
         
     Returns:
     --------
@@ -223,7 +217,7 @@ def plot_cross_model_roc_curves(
             color=style["color"],
             linestyle=style["linestyle"],
             linewidth=style["linewidth"],
-            label=f'Tested on {display_name} (AUC = {roc_auc:.4f}) (SM accuracy: {sm_accuracy:.2f})'
+            label=f'Tested on {display_name} (AUC = {roc_auc:.4f})'
         )
     
     # Plot diagonal line (random classifier)
