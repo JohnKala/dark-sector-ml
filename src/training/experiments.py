@@ -198,6 +198,9 @@ def train_leave_one_out_models(
             verbose=verbose
         )
         
+        # Get normalization parameters for later use with left-out dataset
+        norm_params = ml_data.get('norm_params', None)
+        
         # Prepare data for DeepSets if needed
         if model_type.lower() == 'deepsets':
             prepared_data = prepare_deepsets_data(ml_data)
@@ -225,13 +228,27 @@ def train_leave_one_out_models(
             verbose=verbose
         )
         
-        # Prepare left-out dataset using the same normalization approach
-        # Note: The prepare_ml_dataset function will handle normalization robustly
+        # Prepare left-out dataset WITHOUT normalization first
         left_out_ml_data = prepare_ml_dataset(
             left_out_data,
-            normalize=normalize,
+            normalize=False,  # Don't normalize yet - we'll use training params
             verbose=verbose
         )
+        
+        # Apply same normalization from training set if needed
+        if normalize and norm_params is not None:
+            # Apply normalization to left-out data using training parameters
+            for split in ['train', 'val', 'test']:
+                scaler = StandardScaler()
+                scaler.mean_ = np.array(norm_params['mean'])
+                scaler.scale_ = np.array(norm_params['scale'])
+                scaler.n_features_in_ = len(norm_params['mean'])
+                
+                # Transform using training set parameters
+                left_out_ml_data[split]['X_norm'] = scaler.transform(left_out_ml_data[split]['X'])
+            
+            # Add norm_params to left_out_data for consistency
+            left_out_ml_data['norm_params'] = norm_params
         
         # Prepare left-out data for DeepSets if needed
         if model_type.lower() == 'deepsets':
