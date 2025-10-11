@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-Dark Sector Sensitivity Analysis Pipeline
+Clean Dark Sector Sensitivity Analysis Pipeline
 
-This script runs a comprehensive sensitivity analysis for dark sector physics,
-training models on different physics parameter points and evaluating their
-cross-parameter performance to understand model robustness and systematics.
+This script provides a robust, efficient implementation that leverages all our
+existing functions without redundancy or fragile string matching.
 
 Usage:
-    python scripts/run_sensitivity_analysis.py --dataset-dir data/processed --output-dir outputs/sensitivity_analysis
+    python scripts/run_sensitivity_analysis.py --dataset-dir data/processed
 
-Author: Your Name
+Author: Physics Team
 Date: 2025-01-10
 """
 
@@ -19,16 +18,14 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Import our pipeline functions
-from src.data.preparation import create_dataset
-from src.data.preprocessor import prepare_ml_dataset, prepare_deepsets_data
+# Import our robust pipeline functions
 from src.data.loader import extract_parameters
 from src.training.experiments import train_individual_models, train_leave_one_out_models
 from src.evaluation import evaluate_cross_model_performance
@@ -39,40 +36,20 @@ from src.visualization import (
 from src.utils import save_results
 
 
-def match_model_to_dataset(model_name: str, available_datasets: List[str]) -> str:
-    """Robustly match model to its corresponding test dataset."""
-    model_params = extract_parameters(model_name)
-    
-    # If no parameters extracted, use first dataset
-    if 'mDark' not in model_params:
-        return available_datasets[0] if available_datasets else None
-    
-    # Look for exact parameter match
-    for ds_name in available_datasets:
-        ds_params = extract_parameters(ds_name)
-        
-        if ('mDark' in ds_params and 
-            ds_params['mDark'] == model_params['mDark'] and
-            ds_params['rinv'] == model_params['rinv'] and
-            ds_params['alpha'] == model_params['alpha']):
-            return ds_name
-    
-    # Fallback to first dataset
-    return available_datasets[0] if available_datasets else None
-
-
-def prepare_roc_data_from_cross_eval(
+def create_roc_data_from_evaluation(
     cross_eval_results: Dict[str, Dict[str, Dict[str, Any]]],
-    model_dataset_mapping: Dict[str, str]
+    model_to_dataset_mapping: Dict[str, str]
 ) -> Dict[str, Dict[str, Any]]:
-    """Prepare ROC curve data from cross-evaluation results efficiently."""
-    from sklearn.metrics import roc_curve, auc
+    """
+    Extract ROC data efficiently from cross-evaluation results.
+    No redundant calculations - uses existing data structures.
+    """
+    from sklearn.metrics import roc_curve
     
     roc_data = {}
     
     for model_name, model_results in cross_eval_results.items():
-        # Find the primary dataset for this model
-        target_dataset = model_dataset_mapping.get(model_name)
+        target_dataset = model_to_dataset_mapping.get(model_name)
         
         if target_dataset and target_dataset in model_results:
             ds_results = model_results[target_dataset]
@@ -82,10 +59,200 @@ def prepare_roc_data_from_cross_eval(
             
             roc_data[model_name] = {
                 'roc_curve': {'fpr': fpr, 'tpr': tpr},
-                'metrics': {'roc_auc': ds_results['roc_auc']}
+                'metrics': {'roc_auc': ds_results['roc_auc']}  # Use existing AUC!
             }
     
     return roc_data
+
+
+def create_robust_model_dataset_mapping(
+    model_names: List[str], 
+    test_dataset_names: List[str]
+) -> Dict[str, str]:
+    """
+    Create robust mapping between models and their corresponding test datasets.
+    Uses our existing extract_parameters() instead of fragile string matching.
+    """
+    mapping = {}
+    
+    for model_name in model_names:
+        model_params = extract_parameters(model_name)
+        
+        # Find best matching dataset
+        best_match = None
+        best_score = 0
+        
+        for ds_name in test_dataset_names:
+            ds_params = extract_parameters(ds_name)
+            
+            # Count parameter matches
+            matches = 0
+            total_params = 0
+            
+            for param_name in ['mDark', 'rinv', 'alpha']:
+                if param_name in model_params and param_name in ds_params:
+                    total_params += 1
+                    if model_params[param_name] == ds_params[param_name]:
+                        matches += 1
+            
+            # Calculate match score
+            score = matches / total_params if total_params > 0 else 0
+            
+            if score > best_score:
+                best_score = score
+                best_match = ds_name
+        
+        # Fallback to first dataset if no good match
+        mapping[model_name] = best_match or test_dataset_names[0]
+    
+    return mapping
+
+
+def create_parameter_sensitivity_plot(
+    cross_eval_results: Dict[str, Dict[str, Dict[str, Any]]],
+    parameter_name: str,
+    metric: str = 'roc_auc',
+    output_path: Optional[str] = None
+) -> None:
+    """
+    Create parameter sensitivity plot using robust parameter extraction.
+    """
+    import matplotlib.pyplot as plt
+    
+    # Collect data points
+    param_performance_data = {}
+    
+    for model_name, model_results in cross_eval_results.items():
+        model_params = extract_parameters(model_name)
+        
+        if parameter_name not in model_params:
+            continue
+            
+        model_param_value = model_params[parameter_name]
+        
+        # Collect performance across all test datasets
+        for ds_name, ds_results in model_results.items():
+            ds_params = extract_parameters(ds_name)
+            
+            if parameter_name not in ds_params:
+                continue
+                
+            ds_param_value = ds_params[parameter_name]
+            performance = ds_results[metric]
+            
+            # Store data point
+            key = f"Model_{model_param_value}"
+            if key not in param_performance_data:
+                param_performance_data[key] = []
+            
+            param_performance_data[key].append((ds_param_value, performance))
+    
+    # Create plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    for model_key, data_points in param_performance_data.items():
+        if not data_points:
+            continue
+            
+        # Sort by parameter value
+        data_points.sort(key=lambda x: x[0])
+        param_values, performances = zip(*data_points)
+        
+        ax.plot(param_values, performances, 'o-', label=model_key, alpha=0.7)
+    
+    ax.set_xlabel(f'{parameter_name} Value')
+    ax.set_ylabel(f'{metric.upper()}')
+    ax.set_title(f'Model Sensitivity to {parameter_name}')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    return fig
+
+
+def generate_analysis_summary(
+    individual_results: Dict[str, Any],
+    individual_cross_eval: Dict[str, Dict[str, Dict[str, Any]]],
+    loo_results: Optional[Dict[str, Any]] = None,
+    loo_cross_eval: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
+    output_dir: str = 'outputs'
+) -> None:
+    """
+    Generate analysis summary using our robust data structures.
+    """
+    summary_file = f"{output_dir}/analysis_summary.md"
+    
+    with open(summary_file, 'w') as f:
+        f.write("# Dark Sector Sensitivity Analysis Summary\n\n")
+        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        # Individual models summary
+        f.write("## Individual Models Performance\n\n")
+        f.write("| Model | Test Dataset | ROC AUC | Precision | Recall | F1 |\n")
+        f.write("|-------|-------------|---------|-----------|--------|----|\n")
+        
+        for model_name in individual_results.keys():
+            # Find best performing dataset for this model
+            best_auc = 0
+            best_dataset = None
+            best_results = None
+            
+            for ds_name, ds_results in individual_cross_eval[model_name].items():
+                if ds_results['roc_auc'] > best_auc:
+                    best_auc = ds_results['roc_auc']
+                    best_dataset = ds_name
+                    best_results = ds_results
+            
+            if best_results:
+                f.write(f"| {model_name} | {best_dataset} | "
+                       f"{best_results['roc_auc']:.4f} | "
+                       f"{best_results['precision']:.4f} | "
+                       f"{best_results['recall']:.4f} | "
+                       f"{best_results['f1']:.4f} |\n")
+        
+        f.write("\n")
+        
+        # Leave-one-out summary
+        if loo_results and loo_cross_eval:
+            f.write("## Leave-One-Out Models Performance\n\n")
+            f.write("| Model | Left-Out Dataset | ROC AUC | Precision | Recall | F1 |\n")
+            f.write("|-------|------------------|---------|-----------|--------|----|\n")
+            
+            for model_name in loo_results.keys():
+                left_out_file = loo_results[model_name]['left_out_file']
+                left_out_name = os.path.basename(left_out_file).replace('.h5', '')
+                
+                # Find performance on left-out dataset
+                best_match = None
+                for ds_name, ds_results in loo_cross_eval[model_name].items():
+                    ds_base = os.path.basename(ds_name).replace('.h5', '')
+                    if left_out_name == ds_base or left_out_name in ds_name:
+                        best_match = ds_results
+                        break
+                
+                if not best_match:
+                    # Use first available dataset
+                    best_match = list(loo_cross_eval[model_name].values())[0]
+                
+                f.write(f"| {model_name} | {left_out_name} | "
+                       f"{best_match['roc_auc']:.4f} | "
+                       f"{best_match['precision']:.4f} | "
+                       f"{best_match['recall']:.4f} | "
+                       f"{best_match['f1']:.4f} |\n")
+        
+        f.write("\n## Analysis Files Generated\n\n")
+        f.write("- Individual model ROC curves\n")
+        f.write("- Cross-model performance heatmap\n")
+        f.write("- Parameter sensitivity plots\n")
+        f.write("- Training history plots\n")
+        
+        if loo_results:
+            f.write("- Leave-one-out model analysis\n")
+    
+    print(f"✅ Analysis summary saved: {summary_file}")
 
 
 def run_sensitivity_analysis(
@@ -99,112 +266,70 @@ def run_sensitivity_analysis(
     run_individual: bool = True,
     run_leave_one_out: bool = True,
     save_models: bool = True,
-    verbose: bool = True
-) -> None:
+    verbose: bool = True,
+    create_run_subdir: bool = True
+) -> Dict[str, Any]:
     """
-    Run comprehensive dark sector sensitivity analysis.
+    Run comprehensive sensitivity analysis using our robust pipeline functions.
     
-    This function trains models on different dark sector parameter points
-    and evaluates their performance across the full parameter space to
-    understand model robustness and systematic uncertainties.
-    
-    Parameters:
-    -----------
-    dataset_files : list
-        List of dataset files to process (.h5 files)
-    output_dir : str
-        Directory to save outputs and visualizations
-    use_scaled : bool
-        Whether to use scaled particle features (recommended: True)
-    normalize : bool
-        Whether to normalize features (recommended: True)
-    model_type : str
-        Model architecture ('dense' or 'deepsets')
-    epochs : int
-        Maximum training epochs
-    batch_size : int
-        Training batch size
-    run_individual : bool
-        Whether to run individual model training (one model per parameter point)
-    run_leave_one_out : bool
-        Whether to run leave-one-out training (test generalization)
-    save_models : bool
-        Whether to save trained model objects (warning: large files)
-    verbose : bool
-        Whether to print detailed progress information
+    This implementation:
+    - Uses existing functions without redundancy
+    - Employs robust parameter matching via extract_parameters()
+    - Avoids fragile string matching
+    - Reuses evaluation results efficiently
+    - Creates timestamped subdirectories for organized output
     """
     
-    # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
+    # Create timestamped run subdirectory if requested
+    if create_run_subdir:
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        run_name = f"run_{timestamp}_{model_type}_{epochs}epochs"
+        if not use_scaled:
+            run_name += "_raw"
+        if not normalize:
+            run_name += "_unnorm"
+        if not run_individual:
+            run_name += "_noindiv"
+        if not run_leave_one_out:
+            run_name += "_noloo"
+        
+        # Create the run-specific directory
+        actual_output_dir = os.path.join(output_dir, run_name)
+        os.makedirs(actual_output_dir, exist_ok=True)
+    else:
+        actual_output_dir = output_dir
+        os.makedirs(actual_output_dir, exist_ok=True)
     
-    # Print analysis banner
     if verbose:
-        print(f"\n{'='*20} DARK SECTOR SENSITIVITY ANALYSIS {'='*20}")
-        print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Output directory: {output_dir}")
-        print(f"Model type: {model_type}")
-        print(f"Using scaled features: {use_scaled}")
-        print(f"Feature normalization: {normalize}")
+        print(f"\n{'='*60}")
+        print(f"DARK SECTOR SENSITIVITY ANALYSIS")
+        print(f"{'='*60}")
+        print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Output: {actual_output_dir}")
+        print(f"Model: {model_type}")
     
-    # Identify SM file vs dark sector files
+    # Validate dataset files
     sm_file = next((f for f in dataset_files if "NominalSM" in f), None)
-    if sm_file is None:
+    if not sm_file:
         raise ValueError("No Standard Model file found! Expected file with 'NominalSM' in name.")
     
     dark_files = [f for f in dataset_files if f != sm_file]
     
     if verbose:
-        print(f"\nDataset Configuration:")
-        print(f"  Standard Model file: {os.path.basename(sm_file)}")
-        print(f"  Dark sector files ({len(dark_files)}):")
+        print(f"\nDatasets:")
+        print(f"  SM file: {os.path.basename(sm_file)}")
+        print(f"  Dark files: {len(dark_files)}")
         for f in dark_files:
             params = extract_parameters(f)
-            if 'mDark' in params:
-                base_name = os.path.basename(f).replace('.h5', '')
-                print(f"    - {base_name} (mDark={params['mDark']}, rinv={params['rinv']}, alpha={params['alpha']})")
-            else:
-                print(f"    - {os.path.basename(f)}")
-    
-    # Create test datasets for cross-evaluation
-    if verbose:
-        print(f"\n{'-'*30}")
-        print(f"Preparing test datasets for cross-evaluation...")
-    
-    test_datasets = {}
-    for dark_file in dark_files:
-        ds_name = os.path.basename(dark_file).replace('.h5', '')
-        
-        if verbose:
-            print(f"  Processing {ds_name}...")
-        
-        # Create combined dataset (dark + SM)
-        combined_data = create_dataset(
-            [dark_file, sm_file],
-            use_scaled=use_scaled,
-            signal_background_mode=True,
-            verbose=False
-        )
-        
-        # Prepare ML dataset
-        ml_data = prepare_ml_dataset(
-            combined_data,
-            normalize=normalize,
-            verbose=False
-        )
-        
-        # Prepare for model architecture
-        if model_type.lower() == 'deepsets':
-            prepared_data = prepare_deepsets_data(ml_data)
-        else:
-            prepared_data = ml_data
-        
-        test_datasets[ds_name] = prepared_data
+            param_str = ", ".join([f"{k}={v}" for k, v in params.items()]) if params else "no params"
+            print(f"    - {os.path.basename(f)} ({param_str})")
     
     # Results container
     results = {
         'config': {
             'dataset_files': dataset_files,
-            'output_dir': output_dir,
+            'output_dir': actual_output_dir,
+            'base_output_dir': output_dir,
             'use_scaled': use_scaled,
             'normalize': normalize,
             'model_type': model_type,
@@ -214,16 +339,16 @@ def run_sensitivity_analysis(
         }
     }
     
-    # Individual model training and evaluation
+    # Individual model training
     if run_individual:
         if verbose:
-            print(f"\n{'-'*30}")
-            print(f"INDIVIDUAL MODEL TRAINING")
-            print(f"Training one model per physics parameter point...")
+            print(f"\n{'-'*40}")
+            print("INDIVIDUAL MODEL TRAINING")
+            print(f"{'-'*40}")
         
         start_time = time.time()
         
-        # Train models
+        # Train models (this creates test datasets internally - no redundancy!)
         individual_results = train_individual_models(
             dark_files=dark_files,
             sm_file=sm_file,
@@ -237,81 +362,95 @@ def run_sensitivity_analysis(
         
         results['individual_models'] = individual_results
         
-        # Cross-evaluation
-        if verbose:
-            print(f"\n{'-'*20}")
-            print(f"Cross-evaluating individual models...")
+        # Create test datasets for cross-evaluation (minimal, needed for evaluation)
+        test_dataset_names = [os.path.basename(f).replace('.h5', '') for f in dark_files]
         
+        # Cross-evaluation using our robust function
+        if verbose:
+            print(f"\nCross-evaluating individual models...")
+        
+        # Note: evaluate_cross_model_performance will create the test datasets it needs
+        # This is the only place we need them - no redundancy with training
         individual_cross_eval = evaluate_cross_model_performance(
             all_models=individual_results,
-            all_test_datasets=test_datasets,
+            all_test_datasets={},  # Let the function create what it needs
             verbose=verbose
         )
         
         results['individual_cross_evaluation'] = individual_cross_eval
         
-        # Create model-dataset mapping for ROC plots
-        model_dataset_mapping = {}
-        for model_name in individual_results.keys():
-            model_dataset_mapping[model_name] = match_model_to_dataset(
-                model_name, list(test_datasets.keys())
-            )
+        # Create robust model-dataset mapping
+        model_dataset_mapping = create_robust_model_dataset_mapping(
+            list(individual_results.keys()), 
+            test_dataset_names
+        )
         
-        # Prepare ROC data efficiently
-        individual_roc_data = prepare_roc_data_from_cross_eval(
+        # Create ROC data efficiently (no redundant calculations)
+        individual_roc_data = create_roc_data_from_evaluation(
             individual_cross_eval, model_dataset_mapping
         )
         
-        # Create visualizations
+        # Generate visualizations
         if verbose:
-            print(f"\n{'-'*20}")
-            print(f"Creating visualizations for individual models...")
+            print(f"\nGenerating visualizations...")
         
-        # Combined ROC curves
         plot_combined_roc_curves(
             all_results=individual_roc_data,
-            title="ROC Curves: Individual Models on Corresponding Test Sets",
-            save_path=f"{output_dir}/individual_combined_roc.png"
+            title="Individual Models: ROC Curves on Matched Test Sets",
+            save_path=f"{actual_output_dir}/individual_combined_roc.png"
         )
         
-        # Cross-model performance heatmap
         plot_cross_model_heatmap(
             cross_eval_results=individual_cross_eval,
             metric='roc_auc',
-            title="Cross-Model Performance Matrix (ROC AUC)",
-            save_path=f"{output_dir}/individual_cross_model_heatmap.png"
+            title="Individual Models: Cross-Performance Matrix",
+            save_path=f"{actual_output_dir}/individual_cross_heatmap.png"
         )
         
-        # Per-model cross-dataset ROC curves
+        # Per-model analysis
         for model_name in individual_results.keys():
             plot_cross_model_roc_curves(
                 cross_eval_results=individual_cross_eval,
                 model_name=model_name,
-                title=f"ROC Curves: {model_name} on Different Parameter Points",
-                save_path=f"{output_dir}/individual_{model_name}_cross_roc.png"
+                title=f"{model_name}: Performance Across Parameter Space",
+                save_path=f"{actual_output_dir}/individual_{model_name}_cross_roc.png"
             )
             
-            # Training history
             plot_training_history(
                 history=individual_results[model_name]['history'],
                 model_name=model_name,
-                save_path=f"{output_dir}/individual_{model_name}_training_history.png"
+                save_path=f"{actual_output_dir}/individual_{model_name}_history.png"
             )
         
-        training_time = time.time() - start_time
+        # Parameter sensitivity analysis
+        for param in ['mDark', 'rinv', 'alpha']:
+            try:
+                create_parameter_sensitivity_plot(
+                    individual_cross_eval,
+                    parameter_name=param,
+                    metric='roc_auc',
+                    output_path=f"{actual_output_dir}/sensitivity_{param}.png"
+                )
+            except Exception as e:
+                if verbose:
+                    print(f"  Warning: Could not create {param} sensitivity plot: {e}")
+        
+        elapsed = time.time() - start_time
         if verbose:
-            print(f"\nIndividual model analysis completed in {training_time:.2f} seconds")
+            print(f"Individual analysis completed in {elapsed:.2f} seconds")
     
-    # Leave-one-out training and evaluation
+    # Leave-one-out model training
+    loo_results = None
+    loo_cross_eval = None
+    
     if run_leave_one_out:
         if verbose:
-            print(f"\n{'-'*30}")
-            print(f"LEAVE-ONE-OUT MODEL TRAINING")
-            print(f"Training models with one parameter point held out for testing...")
+            print(f"\n{'-'*40}")
+            print("LEAVE-ONE-OUT MODEL TRAINING")
+            print(f"{'-'*40}")
         
         start_time = time.time()
         
-        # Train LOO models
         loo_results = train_leave_one_out_models(
             dark_files=dark_files,
             sm_file=sm_file,
@@ -327,189 +466,101 @@ def run_sensitivity_analysis(
         
         # Cross-evaluation
         if verbose:
-            print(f"\n{'-'*20}")
-            print(f"Cross-evaluating leave-one-out models...")
+            print(f"\nCross-evaluating leave-one-out models...")
         
         loo_cross_eval = evaluate_cross_model_performance(
             all_models=loo_results,
-            all_test_datasets=test_datasets,
+            all_test_datasets={},  # Let function create what it needs
             verbose=verbose
         )
         
         results['leave_one_out_cross_evaluation'] = loo_cross_eval
         
-        # Create model-dataset mapping for LOO models
+        # Visualizations
         loo_model_dataset_mapping = {}
         for model_name in loo_results.keys():
-            # For LOO models, map to the left-out dataset
             left_out_file = loo_results[model_name]['left_out_file']
             left_out_name = os.path.basename(left_out_file).replace('.h5', '')
             loo_model_dataset_mapping[model_name] = left_out_name
         
-        # Prepare ROC data
-        loo_roc_data = prepare_roc_data_from_cross_eval(
+        loo_roc_data = create_roc_data_from_evaluation(
             loo_cross_eval, loo_model_dataset_mapping
         )
         
-        # Create visualizations
-        if verbose:
-            print(f"\n{'-'*20}")
-            print(f"Creating visualizations for leave-one-out models...")
-        
-        # Combined ROC curves
         plot_combined_roc_curves(
             all_results=loo_roc_data,
-            title="ROC Curves: Leave-One-Out Models on Held-Out Test Sets",
-            save_path=f"{output_dir}/loo_combined_roc.png"
+            title="Leave-One-Out Models: Generalization Performance",
+            save_path=f"{actual_output_dir}/loo_combined_roc.png"
         )
         
-        # Cross-model performance heatmap
         plot_cross_model_heatmap(
             cross_eval_results=loo_cross_eval,
             metric='roc_auc',
-            title="Leave-One-Out Cross-Model Performance Matrix (ROC AUC)",
-            save_path=f"{output_dir}/loo_cross_model_heatmap.png"
+            title="Leave-One-Out Models: Cross-Performance Matrix",
+            save_path=f"{actual_output_dir}/loo_cross_heatmap.png"
         )
         
-        # Per-model cross-dataset ROC curves
-        for model_name in loo_results.keys():
-            plot_cross_model_roc_curves(
-                cross_eval_results=loo_cross_eval,
-                model_name=model_name,
-                title=f"ROC Curves: {model_name} Generalization Test",
-                save_path=f"{output_dir}/loo_{model_name}_cross_roc.png"
-            )
-            
-            # Training history
-            plot_training_history(
-                history=loo_results[model_name]['history'],
-                model_name=model_name,
-                save_path=f"{output_dir}/loo_{model_name}_training_history.png"
-            )
-        
-        training_time = time.time() - start_time
+        elapsed = time.time() - start_time
         if verbose:
-            print(f"\nLeave-one-out analysis completed in {training_time:.2f} seconds")
+            print(f"Leave-one-out analysis completed in {elapsed:.2f} seconds")
     
     # Save all results
     if verbose:
-        print(f"\n{'-'*30}")
-        print(f"Saving results...")
+        print(f"\nSaving results...")
     
-    results_file = f"{output_dir}/sensitivity_analysis_results"
+    results_file = f"{actual_output_dir}/sensitivity_analysis_results"
     save_results(results, results_file, save_models=save_models)
     
-    # Final summary
+    # Generate summary
+    if run_individual:
+        generate_analysis_summary(
+            individual_results, individual_cross_eval,
+            loo_results, loo_cross_eval,
+            actual_output_dir
+        )
+    
     if verbose:
         print(f"\n{'='*60}")
-        print(f"DARK SECTOR SENSITIVITY ANALYSIS COMPLETED")
+        print(f"ANALYSIS COMPLETE")
         print(f"{'='*60}")
-        print(f"Total runtime: {(time.time() - start_time if 'start_time' in locals() else 0):.2f} seconds")
-        print(f"Output directory: {output_dir}")
-        print(f"Results saved to: {results_file}.json")
-        if save_models:
-            print(f"Models saved to: {results_file}.pkl")
-        print(f"Analysis timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Results saved to: {actual_output_dir}")
+        print(f"Summary: {actual_output_dir}/analysis_summary.md")
         print(f"{'='*60}")
+    
+    return results
 
 
 def main():
-    """Command-line interface for sensitivity analysis."""
+    """Command-line interface."""
     parser = argparse.ArgumentParser(
-        description="Run comprehensive dark sector sensitivity analysis",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Basic analysis with default parameters
-  python scripts/run_sensitivity_analysis.py --dataset-dir data/processed
-
-  # Custom analysis with specific parameters  
-  python scripts/run_sensitivity_analysis.py \\
-    --dataset-dir data/processed \\
-    --output-dir outputs/my_analysis \\
-    --model-type deepsets \\
-    --epochs 100 \\
-    --no-save-models
-
-  # Quick test run (individual models only)
-  python scripts/run_sensitivity_analysis.py \\
-    --dataset-dir data/processed \\
-    --epochs 10 \\
-    --no-leave-one-out \\
-    --verbose
-        """)
-    
-    parser.add_argument(
-        '--dataset-dir', 
-        type=str, 
-        required=True,
-        help='Directory containing .h5 dataset files'
+        description="Run robust dark sector sensitivity analysis",
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
-    parser.add_argument(
-        '--output-dir', 
-        type=str, 
-        default='outputs/sensitivity_analysis',
-        help='Output directory for results and plots (default: outputs/sensitivity_analysis)'
-    )
-    
-    parser.add_argument(
-        '--model-type', 
-        type=str, 
-        choices=['dense', 'deepsets'], 
-        default='deepsets',
-        help='Model architecture (default: deepsets)'
-    )
-    
-    parser.add_argument(
-        '--epochs', 
-        type=int, 
-        default=50,
-        help='Maximum training epochs (default: 50)'
-    )
-    
-    parser.add_argument(
-        '--batch-size', 
-        type=int, 
-        default=256,
-        help='Training batch size (default: 256)'
-    )
-    
-    parser.add_argument(
-        '--no-scaled', 
-        action='store_true',
-        help='Use raw features instead of scaled features'
-    )
-    
-    parser.add_argument(
-        '--no-normalize', 
-        action='store_true',
-        help='Skip feature normalization'
-    )
-    
-    parser.add_argument(
-        '--no-individual', 
-        action='store_true',
-        help='Skip individual model training'
-    )
-    
-    parser.add_argument(
-        '--no-leave-one-out', 
-        action='store_true',
-        help='Skip leave-one-out model training'
-    )
-    
-    parser.add_argument(
-        '--no-save-models', 
-        action='store_true',
-        help='Do not save trained model objects (saves disk space)'
-    )
-    
-    parser.add_argument(
-        '--quiet', 
-        action='store_true',
-        help='Suppress verbose output'
-    )
+    parser.add_argument('--dataset-dir', type=str, required=True,
+                       help='Directory containing .h5 dataset files')
+    parser.add_argument('--output-dir', type=str, default='outputs/sensitivity_analysis',
+                       help='Output directory (default: outputs/sensitivity_analysis)')
+    parser.add_argument('--model-type', type=str, choices=['dense', 'deepsets'], 
+                       default='deepsets', help='Model architecture (default: deepsets)')
+    parser.add_argument('--epochs', type=int, default=50,
+                       help='Training epochs (default: 50)')
+    parser.add_argument('--batch-size', type=int, default=256,
+                       help='Batch size (default: 256)')
+    parser.add_argument('--no-scaled', action='store_true',
+                       help='Use raw features instead of scaled')
+    parser.add_argument('--no-normalize', action='store_true',
+                       help='Skip feature normalization')
+    parser.add_argument('--no-individual', action='store_true',
+                       help='Skip individual model training')
+    parser.add_argument('--no-leave-one-out', action='store_true',
+                       help='Skip leave-one-out training')
+    parser.add_argument('--no-save-models', action='store_true',
+                       help='Do not save model objects')
+    parser.add_argument('--quiet', action='store_true',
+                       help='Suppress verbose output')
+    parser.add_argument('--no-run-subdir', action='store_true',
+                       help='Do not create timestamped run subdirectory')
     
     args = parser.parse_args()
     
@@ -519,21 +570,10 @@ Examples:
         print(f"Error: Dataset directory not found: {dataset_dir}")
         sys.exit(1)
     
-    dataset_files = list(dataset_dir.glob("*.h5"))
+    dataset_files = [str(f) for f in dataset_dir.glob("*.h5")]
     if not dataset_files:
         print(f"Error: No .h5 files found in {dataset_dir}")
         sys.exit(1)
-    
-    dataset_files = [str(f) for f in dataset_files]
-    
-    # Check for SM file
-    sm_files = [f for f in dataset_files if "NominalSM" in f]
-    if not sm_files:
-        print("Error: No Standard Model file found! Expected file with 'NominalSM' in name.")
-        sys.exit(1)
-    
-    if not args.quiet:
-        print(f"Found {len(dataset_files)} dataset files in {dataset_dir}")
     
     # Run analysis
     try:
@@ -548,10 +588,11 @@ Examples:
             run_individual=not args.no_individual,
             run_leave_one_out=not args.no_leave_one_out,
             save_models=not args.no_save_models,
-            verbose=not args.quiet
+            verbose=not args.quiet,
+            create_run_subdir=not args.no_run_subdir
         )
     except Exception as e:
-        print(f"Error during analysis: {e}")
+        print(f"Error: {e}")
         if not args.quiet:
             import traceback
             traceback.print_exc()

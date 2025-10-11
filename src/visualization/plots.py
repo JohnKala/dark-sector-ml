@@ -281,7 +281,18 @@ def plot_cross_model_heatmap(
     
     # Extract model and dataset names
     model_names = list(cross_eval_results.keys())
+    
+    # Safety check for empty results
+    if not model_names:
+        print("Warning: No models in cross_eval_results")
+        return plt.figure()
+    
     dataset_names = list(cross_eval_results[model_names[0]].keys())
+    
+    # Safety check for empty datasets
+    if not dataset_names:
+        print("Warning: No datasets in cross_eval_results")
+        return plt.figure()
     
     # Create matrix for heatmap
     data = np.zeros((len(model_names), len(dataset_names)))

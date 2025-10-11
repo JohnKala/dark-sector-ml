@@ -27,12 +27,15 @@ dark-sector-ml/
 
 ## Features
 
-- Multiple model architectures (Dense, DeepSets, Attention DeepSets)
-- Adversarial training capabilities
-- Cross-validation and model comparison
-- Comprehensive visualization tools
-- Modular and extensible design
-- Professional packaging and testing framework
+- **Multiple Model Architectures**: Dense, DeepSets, Attention DeepSets
+- **Adversarial Training**: Robust model training capabilities
+- **Sensitivity Analysis**: Comprehensive cross-parameter model evaluation
+- **Parameter Space Exploration**: Automated analysis across physics parameter points
+- **Cross-validation and Model Comparison**: Statistical model evaluation
+- **Rich Visualization Suite**: ROC curves, heatmaps, parameter sensitivity plots
+- **Production-Ready Pipeline**: CLI scripts with organized timestamped outputs
+- **Modular and Extensible Design**: Clean, maintainable codebase
+- **Professional Testing Framework**: Comprehensive unit tests
 
 ## Installation
 
@@ -42,15 +45,27 @@ pip install -e .
 
 ## Usage
 
-### Training a Model
+### Sensitivity Analysis (Main Feature)
 ```bash
-python scripts/train.py --config experiments/configs/baseline.yaml
+# Quick test run
+python scripts/run_sensitivity_analysis.py --dataset-dir data/raw --epochs 10
+
+# Production analysis
+python scripts/run_sensitivity_analysis.py --dataset-dir data/raw --epochs 50 --model-type deepsets
 ```
 
-### Evaluation
+### Standard Training
 ```bash
-python scripts/evaluate.py --model-path outputs/models/best_model.pt
+python scripts/run_standard_training.py --dataset dark_sector_data.h5 --model-type deepsets
 ```
+
+### Model Comparison
+```bash
+python scripts/run_comparison.py --models-dir outputs/models/
+```
+
+### Jupyter Notebooks
+See `notebooks/experiments/04_sensitivity_analysis.ipynb` for interactive analysis.
 
 ## Documentation
 
