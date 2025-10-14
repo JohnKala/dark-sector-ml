@@ -51,8 +51,15 @@ def create_roc_data_from_evaluation(
     for model_name, model_results in cross_eval_results.items():
         target_dataset = model_to_dataset_mapping.get(model_name)
         
+        # Handle both with and without "model_" prefix in dataset names
+        dataset_key = None
         if target_dataset and target_dataset in model_results:
-            ds_results = model_results[target_dataset]
+            dataset_key = target_dataset
+        elif target_dataset and f"model_{target_dataset}" in model_results:
+            dataset_key = f"model_{target_dataset}"
+        
+        if dataset_key:
+            ds_results = model_results[dataset_key]
             
             # Calculate ROC curve from stored predictions
             fpr, tpr, _ = roc_curve(ds_results['y_true'], ds_results['y_pred_proba'])
@@ -357,6 +364,8 @@ def run_sensitivity_analysis(
             model_type=model_type,
             epochs=epochs,
             batch_size=batch_size,
+            output_dir=actual_output_dir,
+            save_model=save_models,
             verbose=verbose
         )
         
@@ -369,11 +378,12 @@ def run_sensitivity_analysis(
         if verbose:
             print(f"\nCross-evaluating individual models...")
         
-        # Note: evaluate_cross_model_performance will create the test datasets it needs
-        # This is the only place we need them - no redundancy with training
+        # Extract the preserved test datasets from training results (fixes empty plots!)
+        all_test_datasets = {name: res['prepared_data'] for name, res in individual_results.items()}
+        
         individual_cross_eval = evaluate_cross_model_performance(
             all_models=individual_results,
-            all_test_datasets={},  # Let the function create what it needs
+            all_test_datasets=all_test_datasets,  # Use preserved data!
             verbose=verbose
         )
         
@@ -459,6 +469,8 @@ def run_sensitivity_analysis(
             model_type=model_type,
             epochs=epochs,
             batch_size=batch_size,
+            output_dir=actual_output_dir,
+            save_model=save_models,
             verbose=verbose
         )
         
@@ -468,24 +480,44 @@ def run_sensitivity_analysis(
         if verbose:
             print(f"\nCross-evaluating leave-one-out models...")
         
+        # Extract test datasets from LOO results for cross-evaluation
+        loo_test_datasets = {name: res['prepared_data'] for name, res in loo_results.items()}
+        
         loo_cross_eval = evaluate_cross_model_performance(
             all_models=loo_results,
-            all_test_datasets={},  # Let function create what it needs
+            all_test_datasets=loo_test_datasets,  # Use preserved data like individual models
             verbose=verbose
         )
         
         results['leave_one_out_cross_evaluation'] = loo_cross_eval
         
-        # Visualizations
-        loo_model_dataset_mapping = {}
-        for model_name in loo_results.keys():
-            left_out_file = loo_results[model_name]['left_out_file']
-            left_out_name = os.path.basename(left_out_file).replace('.h5', '')
-            loo_model_dataset_mapping[model_name] = left_out_name
+        # Visualizations - use same robust mapping as individual models
+        if verbose:
+            print(f"\nGenerating LOO visualizations...")
+        
+        # Debug: check what keys we have
+        if verbose:
+            print(f"LOO cross-eval keys: {list(loo_cross_eval.keys())[:2]}...")
+            if loo_cross_eval:
+                first_model = list(loo_cross_eval.keys())[0]
+                print(f"First model dataset keys: {list(loo_cross_eval[first_model].keys())[:2]}...")
+        
+        # Create dataset names list - LOO cross-eval uses "loo_" prefixed dataset names
+        loo_dataset_names = [f"loo_{os.path.basename(f).replace('.h5', '')}" for f in dark_files]
+        
+        # Use same robust mapping function as individual models 
+        loo_model_dataset_mapping = create_robust_model_dataset_mapping(
+            list(loo_results.keys()), 
+            loo_dataset_names  # Now matches the actual keys in cross-eval results
+        )
         
         loo_roc_data = create_roc_data_from_evaluation(
             loo_cross_eval, loo_model_dataset_mapping
         )
+        
+        # Debug: check if ROC data was created
+        if verbose:
+            print(f"LOO ROC data created for {len(loo_roc_data)} models")
         
         plot_combined_roc_curves(
             all_results=loo_roc_data,
@@ -499,6 +531,34 @@ def run_sensitivity_analysis(
             title="Leave-One-Out Models: Cross-Performance Matrix",
             save_path=f"{actual_output_dir}/loo_cross_heatmap.png"
         )
+        
+        # Per-model analysis for LOO (same as individual models)
+        for model_name in loo_results.keys():
+            plot_cross_model_roc_curves(
+                cross_eval_results=loo_cross_eval,
+                model_name=model_name,
+                title=f"{model_name}: Performance Across Parameter Space",
+                save_path=f"{actual_output_dir}/loo_{model_name}_cross_roc.png"
+            )
+            
+            plot_training_history(
+                history=loo_results[model_name]['history'],
+                model_name=model_name,
+                save_path=f"{actual_output_dir}/loo_{model_name}_history.png"
+            )
+        
+        # Parameter sensitivity analysis for LOO
+        for param in ['mDark', 'rinv', 'alpha']:
+            try:
+                create_parameter_sensitivity_plot(
+                    loo_cross_eval,
+                    parameter_name=param,
+                    metric='roc_auc',
+                    output_path=f"{actual_output_dir}/loo_sensitivity_{param}.png"
+                )
+            except Exception as e:
+                if verbose:
+                    print(f"  Warning: Could not create LOO {param} sensitivity plot: {e}")
         
         elapsed = time.time() - start_time
         if verbose:

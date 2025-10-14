@@ -28,6 +28,8 @@ def train_individual_models(
     model_type: str = 'deepsets',
     epochs: int = 50,
     batch_size: int = 256,
+    output_dir: str = ".",
+    save_model: bool = True,
     verbose: bool = True
 ) -> Dict[str, Any]:
     """
@@ -49,6 +51,8 @@ def train_individual_models(
         Maximum training epochs
     batch_size : int
         Training batch size
+    output_dir : str
+        Directory to save model weights
     verbose : bool
         Whether to print progress information
         
@@ -106,11 +110,16 @@ def train_individual_models(
             model_name=model_name,
             epochs=epochs,
             batch_size=batch_size,
+            output_dir=output_dir,
+            save_model=save_model,
             verbose=verbose
         )
         
         # Store parameters with results
         results['parameters'] = params
+        
+        # Preserve the prepared data for cross-evaluation (fixes empty plots!)
+        results['prepared_data'] = prepared_data
         
         # Add to collection
         all_results[model_name] = results
@@ -130,6 +139,8 @@ def train_leave_one_out_models(
     model_type: str = 'deepsets',
     epochs: int = 50,
     batch_size: int = 256,
+    output_dir: str = ".",
+    save_model: bool = True,
     verbose: bool = True
 ) -> Dict[str, Any]:
     """
@@ -151,6 +162,8 @@ def train_leave_one_out_models(
         Maximum training epochs
     batch_size : int
         Training batch size
+    output_dir : str
+        Directory to save model weights
     verbose : bool
         Whether to print progress information
         
@@ -214,6 +227,8 @@ def train_leave_one_out_models(
             model_name=model_name,
             epochs=epochs,
             batch_size=batch_size,
+            output_dir=output_dir,
+            save_model=save_model,
             verbose=verbose
         )
         
@@ -265,7 +280,9 @@ def train_leave_one_out_models(
             'training_files': training_files,
             'left_out_file': left_out_file,
             'left_out_data': left_out_prepared,
-            'params': train_results['params']
+            'params': train_results['params'],
+            # Preserve the prepared training data for cross-evaluation (consistency with individual models)
+            'prepared_data': prepared_data
         }
     
     # Print summary
