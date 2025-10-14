@@ -69,10 +69,6 @@ See `notebooks/experiments/04_sensitivity_analysis.ipynb` for interactive analys
 
 ## Documentation
 
-- [Physics Background](docs/physics_background.md)
-- [Model Architecture](docs/model_architecture.md)
-- [API Reference](docs/api_reference.md)
-
 ## Contributing
 
 This repository is part of a physics thesis project on dark sector classification.

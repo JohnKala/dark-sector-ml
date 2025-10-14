@@ -86,13 +86,6 @@ Analyzed: `AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-peak.h5`
 - __Class balance__: Files can be highly imbalanced at the per-file level (e.g., 83% dark in a representative signal file). Ensure stratified splitting or post-weighting when combining with background.
 - __Feature layout__: The flattened particle features match the config and the expected DeepSets input format once reshaped to [N, 20, 3].
 
-## Next Exploration Steps (Suggested)
-
-- Compute per-feature distributions (pT, eta, phi) for valid particles across multiple files.
-- Compare distributions for dark vs SM jets to identify discriminative patterns.
-- Quantify class balance across the combined dataset and consider weighting strategies.
-- Validate mask construction for attention-based models (ensure -999 is consistently masked).
-
 ## 6) Feature Distributions Across Files
 
 Methodology:
@@ -195,4 +188,3 @@ Artifacts and tables:
   - `outputs/param_slices/summary_alpha.tsv`
 
 --
-Generated on: current repo state during interactive exploration.
