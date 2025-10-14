@@ -29,6 +29,7 @@ def train_model(
     lr_patience: int = 5,  # Original LR patience
     class_weight: Optional[Dict[int, float]] = {0: 1, 1: 1},  # Original default
     model_name: str = None,
+    output_dir: str = ".",
     save_model: bool = True,
     verbose: bool = True
 ) -> Dict[str, Any]:
@@ -60,6 +61,8 @@ def train_model(
         Set to None for no class weighting
     model_name : str
         Name for model checkpoints (if None, a timestamp is used)
+    output_dir : str
+        Directory to save model weights (default: current directory)
     save_model : bool
         Whether to save model weights
     verbose : bool
@@ -127,7 +130,7 @@ def train_model(
     if save_model:
         callbacks.append(
             ModelCheckpoint(
-                f"{model_name}.weights.h5",
+                f"{output_dir}/{model_name}.weights.h5",
                 monitor='val_auc',  # Use val_auc to match original
                 mode='max',         # AUC should be maximized
                 save_best_only=True,
