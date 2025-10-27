@@ -4,7 +4,7 @@ Training experiment utilities for cross-validation and parameter studies.
 
 import os
 import numpy as np
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from sklearn.preprocessing import StandardScaler
 
 from ..data.preparation import create_dataset
@@ -30,7 +30,9 @@ def train_individual_models(
     batch_size: int = 256,
     output_dir: str = ".",
     save_model: bool = True,
-    verbose: bool = True
+    verbose: bool = True,
+    # NEW: Adversarial training parameters
+    adversarial_config: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Train separate models for each dark sector file with SM as background.
@@ -55,6 +57,9 @@ def train_individual_models(
         Directory to save model weights
     verbose : bool
         Whether to print progress information
+    adversarial_config : dict, optional
+        Configuration for adversarial training. If provided, enables adversarial training.
+        Example: {'grad_iter': 3, 'grad_eps': 1e-6, 'grad_eta': 2e-4, 'alpha': 5.0}
         
     Returns:
     --------
@@ -72,6 +77,15 @@ def train_individual_models(
         print(f"Using SM file: {os.path.basename(sm_file)}")
         print(f"Model type: {model_type}")
         print(f"Features: {'scaled' if use_scaled else 'raw'}, {'normalized' if normalize else 'unnormalized'}")
+        if adversarial_config:
+            print(f"Adversarial training enabled: {adversarial_config}")
+    
+    # Adjust batch size for adversarial training (performance optimization from Block 1)
+    effective_batch_size = batch_size
+    if adversarial_config:
+        effective_batch_size = max(batch_size * 2, 512)
+        if verbose and effective_batch_size != batch_size:
+            print(f"Batch size increased to {effective_batch_size} for adversarial training")
     
     for dark_file in dark_files:
         # Extract parameters for model naming
@@ -103,16 +117,19 @@ def train_individual_models(
         else:
             prepared_data = ml_data
         
-        # Train model
+        # Train model (with adversarial support if configured)
         results = train_model(
             prepared_data,
             model_type=model_type,
             model_name=model_name,
             epochs=epochs,
-            batch_size=batch_size,
+            batch_size=effective_batch_size,  # Use optimized batch size
             output_dir=output_dir,
             save_model=save_model,
-            verbose=verbose
+            verbose=verbose,
+            # NEW: Pass adversarial configuration to existing trainer
+            adversarial_config=adversarial_config,
+            mixed_precision=bool(adversarial_config)  # Auto-enable mixed precision for adversarial
         )
         
         # Store parameters with results
@@ -141,7 +158,9 @@ def train_leave_one_out_models(
     batch_size: int = 256,
     output_dir: str = ".",
     save_model: bool = True,
-    verbose: bool = True
+    verbose: bool = True,
+    # NEW: Adversarial training parameters
+    adversarial_config: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Train models using a leave-one-out approach.
@@ -183,6 +202,15 @@ def train_leave_one_out_models(
         print(f"Using SM file: {os.path.basename(sm_file)}")
         print(f"Model type: {model_type}")
         print(f"Features: {'scaled' if use_scaled else 'raw'}, {'normalized' if normalize else 'unnormalized'}")
+        if adversarial_config:
+            print(f"Adversarial training enabled: {adversarial_config}")
+    
+    # Adjust batch size for adversarial training (performance optimization from Block 1)
+    effective_batch_size = batch_size
+    if adversarial_config:
+        effective_batch_size = max(batch_size * 2, 512)
+        if verbose and effective_batch_size != batch_size:
+            print(f"Batch size increased to {effective_batch_size} for adversarial training")
     
     # For each file held out
     for i, left_out_file in enumerate(dark_files):
@@ -220,16 +248,19 @@ def train_leave_one_out_models(
         else:
             prepared_data = ml_data
         
-        # Train model
+        # Train model (with adversarial support if configured)
         train_results = train_model(
             prepared_data,
             model_type=model_type,
             model_name=model_name,
             epochs=epochs,
-            batch_size=batch_size,
+            batch_size=effective_batch_size,  # Use optimized batch size
             output_dir=output_dir,
             save_model=save_model,
-            verbose=verbose
+            verbose=verbose,
+            # NEW: Pass adversarial configuration to existing trainer
+            adversarial_config=adversarial_config,
+            mixed_precision=bool(adversarial_config)  # Auto-enable mixed precision for adversarial
         )
         
         # Load left-out dataset for evaluation
