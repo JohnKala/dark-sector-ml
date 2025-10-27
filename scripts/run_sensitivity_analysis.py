@@ -31,7 +31,8 @@ from src.training.experiments import train_individual_models, train_leave_one_ou
 from src.evaluation import evaluate_cross_model_performance
 from src.visualization import (
     plot_combined_roc_curves, plot_cross_model_heatmap, 
-    plot_cross_model_roc_curves, plot_training_history
+    plot_cross_model_roc_curves, plot_training_history,
+    plot_dataset_comparison_models
 )
 from src.utils import save_results
 
@@ -255,6 +256,7 @@ def generate_analysis_summary(
         f.write("- Cross-model performance heatmap\n")
         f.write("- Parameter sensitivity plots\n")
         f.write("- Training history plots\n")
+        f.write("- Dataset comparison plots\n")
         
         if loo_results:
             f.write("- Leave-one-out model analysis\n")
@@ -274,7 +276,8 @@ def run_sensitivity_analysis(
     run_leave_one_out: bool = True,
     save_models: bool = True,
     verbose: bool = True,
-    create_run_subdir: bool = True
+    create_run_subdir: bool = True,
+    generate_dataset_comparisons: bool = True
 ) -> Dict[str, Any]:
     """
     Run comprehensive sensitivity analysis using our robust pipeline functions.
@@ -564,6 +567,44 @@ def run_sensitivity_analysis(
         if verbose:
             print(f"Leave-one-out analysis completed in {elapsed:.2f} seconds")
     
+    # Dataset comparison plots (NEW functionality)
+    if run_individual and generate_dataset_comparisons:
+        if verbose:
+            print(f"\n{'-'*40}")
+            print("DATASET COMPARISON PLOTS")
+            print(f"{'-'*40}")
+        
+        start_time = time.time()
+        
+        # Get unique datasets from dark_files
+        dataset_names = [os.path.basename(f).replace('.h5', '') for f in dark_files]
+        
+        if verbose:
+            print(f"Generating dataset comparison plots for {len(dataset_names)} datasets...")
+        
+        comparison_count = 0
+        for dataset_name in dataset_names:
+            try:
+                plot_dataset_comparison_models(
+                    individual_results=individual_results,
+                    individual_cross_eval=individual_cross_eval,
+                    target_dataset=dataset_name,
+                    loo_results=loo_results,
+                    loo_cross_eval=loo_cross_eval,
+                    save_path=f"{actual_output_dir}/dataset_comparison_{dataset_name}.png",
+                    sm_accuracy=0.79  # Could be made configurable
+                )
+                comparison_count += 1
+                if verbose:
+                    print(f"  ✓ Created comparison plot for {dataset_name}")
+            except Exception as e:
+                if verbose:
+                    print(f"  ⚠ Warning: Could not create dataset comparison plot for {dataset_name}: {e}")
+        
+        elapsed = time.time() - start_time
+        if verbose:
+            print(f"Dataset comparison analysis completed in {elapsed:.2f} seconds ({comparison_count} plots generated)")
+    
     # Save all results
     if verbose:
         print(f"\nSaving results...")
@@ -617,6 +658,8 @@ def main():
                        help='Skip leave-one-out training')
     parser.add_argument('--no-save-models', action='store_true',
                        help='Do not save model objects')
+    parser.add_argument('--no-dataset-comparison', action='store_true',
+                       help='Skip dataset comparison plots generation')
     parser.add_argument('--quiet', action='store_true',
                        help='Suppress verbose output')
     parser.add_argument('--no-run-subdir', action='store_true',
@@ -649,7 +692,8 @@ def main():
             run_leave_one_out=not args.no_leave_one_out,
             save_models=not args.no_save_models,
             verbose=not args.quiet,
-            create_run_subdir=not args.no_run_subdir
+            create_run_subdir=not args.no_run_subdir,
+            generate_dataset_comparisons=not args.no_dataset_comparison
         )
     except Exception as e:
         print(f"Error: {e}")

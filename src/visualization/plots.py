@@ -5,6 +5,7 @@ Plotting utilities for model evaluation and comparison.
 from typing import Dict, Any, Tuple, Optional, List
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
 
 # Import our styling functions
 from .styling import get_model_style, format_model_name
@@ -398,6 +399,221 @@ def plot_training_history(
     # Adjust layout
     plt.tight_layout()
     fig.subplots_adjust(top=0.88)
+    
+    # Save figure if path provided
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    return fig
+
+
+# ====================================================================
+# DATASET COMPARISON VISUALIZATION - NEW FUNCTIONALITY
+# ====================================================================
+
+
+def _adapt_results_for_dataset_comparison(
+    individual_results: Dict[str, Any],
+    individual_cross_eval: Dict[str, Dict[str, Dict[str, Any]]],
+    loo_results: Optional[Dict[str, Any]] = None,
+    loo_cross_eval: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
+) -> Dict[str, Any]:
+    """
+    Adapt current results structure to format expected by dataset comparison function.
+    
+    Parameters:
+    -----------
+    individual_results : dict
+        Individual model training results from current pipeline
+    individual_cross_eval : dict
+        Individual model cross-evaluation results from current pipeline
+    loo_results : dict, optional
+        Leave-one-out model training results from current pipeline
+    loo_cross_eval : dict, optional
+        Leave-one-out model cross-evaluation results from current pipeline
+        
+    Returns:
+    --------
+    dict
+        Adapted results structure compatible with original notebook function
+    """
+    adapted = {
+        'individual': individual_results,
+        'individual_eval': individual_cross_eval
+    }
+    
+    if loo_results and loo_cross_eval:
+        adapted['leave_one_out'] = loo_results
+        adapted['leave_one_out_eval'] = loo_cross_eval
+    
+    return adapted
+
+
+def plot_dataset_comparison_models(
+    individual_results: Dict[str, Any],
+    individual_cross_eval: Dict[str, Dict[str, Dict[str, Any]]],
+    target_dataset: str,
+    loo_results: Optional[Dict[str, Any]] = None,
+    loo_cross_eval: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
+    save_path: str = None,
+    figsize: Tuple[int, int] = (12, 10),
+    sm_accuracy: float = 0.79
+) -> plt.Figure:
+    """
+    Create a specialized plot showing multiple models evaluated on one target dataset.
+    
+    This provides the "dataset-centric" view: How do all our different models 
+    perform on this specific parameter point?
+    
+    Parameters:
+    -----------
+    individual_results : dict
+        Individual model training results from current pipeline
+    individual_cross_eval : dict
+        Individual model cross-evaluation results from current pipeline
+    target_dataset : str
+        Name of the target dataset to focus analysis on
+    loo_results : dict, optional
+        Leave-one-out model training results from current pipeline
+    loo_cross_eval : dict, optional
+        Leave-one-out model cross-evaluation results from current pipeline
+    save_path : str, optional
+        Path to save the figure
+    figsize : tuple
+        Figure size
+    sm_accuracy : float
+        Standard Model accuracy for reference line
+        
+    Returns:
+    --------
+    plt.Figure
+        Matplotlib figure object
+    """
+    # Adapt data structure to match original notebook expectations
+    results = _adapt_results_for_dataset_comparison(
+        individual_results, individual_cross_eval, loo_results, loo_cross_eval
+    )
+    
+    # Create plot
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Track already plotted models to avoid duplicates
+    plotted_models = set()
+    
+    # Helper function to extract ROC data and plot a curve
+    def plot_model_on_dataset(model_name, dataset_name, eval_results, label_prefix, style=None):
+        # Extract dataset results for this model
+        model_results = eval_results.get(model_name, {})
+        dataset_results = None
+        
+        # Try to find evaluation results on the target dataset
+        # Handle both current structure and any nested structures
+        if isinstance(model_results, dict) and dataset_name in model_results:
+            dataset_results = model_results[dataset_name]
+        elif isinstance(model_results, dict) and 'cross_results' in model_results:
+            dataset_results = model_results['cross_results'].get(dataset_name)
+        
+        if not dataset_results:
+            print(f"No results found for {model_name} on {dataset_name}")
+            return None
+        
+        # Extract prediction data
+        if isinstance(dataset_results, dict) and 'predictions' in dataset_results:
+            y_true = dataset_results['predictions']['y_true']
+            y_pred = dataset_results['predictions']['y_pred_proba']
+        elif isinstance(dataset_results, dict) and 'y_true' in dataset_results:
+            y_true = dataset_results['y_true']
+            y_pred = dataset_results['y_pred_proba']
+        else:
+            print(f"Cannot find prediction data for {model_name} on {dataset_name}")
+            return None
+        
+        # Calculate ROC curve
+        fpr, tpr, _ = roc_curve(y_true, y_pred)
+        roc_auc = auc(fpr, tpr)
+        
+        # Get styling
+        if style is None:
+            style = get_model_style(model_name)
+        
+        # Format model name for display
+        display_name = format_model_name(model_name)
+        
+        # Plot with consistent styling
+        ax.plot(
+            fpr, tpr, 
+            color=style["color"],
+            linestyle=style["linestyle"],
+            linewidth=style["linewidth"],
+            label=f'{label_prefix} {display_name} (AUC = {roc_auc:.4f})'
+        )
+        
+        # Mark as plotted
+        plotted_models.add(model_name)
+        return roc_auc
+    
+    # 1. First plot the model trained directly on this dataset (should be highlighted)
+    target_model_name = next((name for name in results['individual'].keys() 
+                              if target_dataset in name), None)
+    
+    if target_model_name:
+        # Use a distinctive style for the target model
+        target_style = get_model_style(target_dataset)
+        target_style["linewidth"] = 3  # Make it slightly thicker
+        
+        # Plot target model with special prefix
+        plot_model_on_dataset(
+            target_model_name, 
+            target_dataset, 
+            results['individual_eval'], 
+            "Target model:", 
+            target_style
+        )
+    
+    # 2. Plot models trained on other dark datasets
+    for model_name in results['individual'].keys():
+        if model_name in plotted_models or target_dataset in model_name:
+            continue  # Skip already plotted models and target model
+        
+        plot_model_on_dataset(
+            model_name, 
+            target_dataset, 
+            results['individual_eval'], 
+            "Model trained on"
+        )
+    
+    # 3. Plot leave-one-out model if available
+    if 'leave_one_out' in results and 'leave_one_out_eval' in results:
+        loo_model_name = next((name for name in results['leave_one_out'].keys() 
+                               if target_dataset in name), None)
+        
+        if loo_model_name:
+            loo_style = {"color": "black", "linestyle": "-.", "linewidth": 2.5}
+            plot_model_on_dataset(
+                loo_model_name, 
+                target_dataset, 
+                results['leave_one_out_eval'], 
+                "Leave-one-out model:", 
+                loo_style
+            )
+    
+    # Plot diagonal line (random classifier)
+    ax.plot([0, 1], [0, 1], color='navy', linestyle='--', linewidth=1, label='Random')
+    
+    # Set axis limits and labels
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    
+    # Set title
+    display_name = format_model_name(target_dataset)
+    title = f'Model Comparison on {display_name} Dataset (SM accuracy: {sm_accuracy:.2f})'
+    ax.set_title(title)
+    
+    # Add legend and grid
+    ax.legend(loc='lower right', fontsize=9)
+    ax.grid(alpha=0.3)
     
     # Save figure if path provided
     if save_path is not None:

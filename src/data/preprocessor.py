@@ -7,6 +7,13 @@ from typing import Dict, List, Any, Tuple, Union
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
+# TensorFlow import for dataset optimization (optional - only used if adversarial training)
+try:
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+
 # Import constants from config
 from ..config import NUM_PARTICLES, NUM_FEATURES
 
@@ -229,3 +236,109 @@ def prepare_deepsets_data(
     # Add original metadata
     deepsets_data['metadata'] = ml_dataset['metadata']
     return deepsets_data
+
+
+def create_optimized_dataset(
+    features: np.ndarray,
+    masks: np.ndarray,
+    labels: np.ndarray,
+    batch_size: int = 256,
+    shuffle: bool = True,
+    buffer_size: int = 10000
+) -> 'tf.data.Dataset':
+    """
+    Create an optimized tf.data.Dataset with prefetching and batching.
+    
+    This function integrates the dataset optimization from the adversarial training
+    code into the existing preprocessing pipeline.
+    
+    Parameters:
+    -----------
+    features : np.ndarray
+        Input features array
+    masks : np.ndarray  
+        Attention masks for features
+    labels : np.ndarray
+        Target labels
+    batch_size : int
+        Batch size for dataset
+    shuffle : bool
+        Whether to shuffle the dataset
+    buffer_size : int
+        Shuffle buffer size
+        
+    Returns:
+    --------
+    tf.data.Dataset
+        Optimized TensorFlow dataset ready for training
+        
+    Raises:
+    -------
+    ImportError
+        If TensorFlow is not available
+    """
+    if not TF_AVAILABLE:
+        raise ImportError("TensorFlow is required for optimized dataset creation. "
+                         "Please install tensorflow or use standard numpy arrays.")
+    
+    # Create dataset from tensor slices
+    dataset = tf.data.Dataset.from_tensor_slices((features, masks, labels))
+    
+    # Apply shuffle if requested
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=buffer_size)
+    
+    # Batch and prefetch for optimal performance
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    
+    return dataset
+
+
+def create_optimized_datasets_from_prepared_data(
+    prepared_data: Dict[str, Any],
+    batch_size: int = 256,
+    shuffle_train: bool = True,
+    buffer_size: int = 10000
+) -> Dict[str, 'tf.data.Dataset']:
+    """
+    Create optimized tf.data.Datasets for all splits from prepared DeepSets data.
+    
+    This is a convenience function that creates optimized datasets for train, 
+    validation, and test splits.
+    
+    Parameters:
+    -----------
+    prepared_data : dict
+        Data prepared by prepare_deepsets_data()
+    batch_size : int
+        Batch size for all datasets
+    shuffle_train : bool
+        Whether to shuffle the training dataset (val/test are never shuffled)
+    buffer_size : int
+        Shuffle buffer size for training dataset
+        
+    Returns:
+    --------
+    dict
+        Dictionary containing optimized tf.data.Datasets for each split
+    """
+    if not TF_AVAILABLE:
+        raise ImportError("TensorFlow is required for optimized dataset creation.")
+    
+    datasets = {}
+    
+    for split in ['train', 'val', 'test']:
+        if split in prepared_data:
+            shuffle = shuffle_train if split == 'train' else False
+            
+            datasets[split] = create_optimized_dataset(
+                features=prepared_data[split]['features'],
+                masks=prepared_data[split]['attention_mask'],
+                labels=prepared_data[split]['labels'],
+                batch_size=batch_size,
+                shuffle=shuffle,
+                buffer_size=buffer_size
+            )
+    
+    return datasets

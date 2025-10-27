@@ -5,6 +5,7 @@ Model factory for creating different types of neural network architectures.
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras import mixed_precision
 from ..config import CONFIG
 from typing import List, Tuple, Union
 
@@ -125,5 +126,72 @@ def create_model(
 
         ]
     )
+    
+    return model
+
+
+def create_model_with_mixed_precision(
+    model_type: str,
+    input_shape: Union[Tuple[int], Tuple[int, int, int]],
+    hidden_units: List[int] = [128, 64],
+    dropout_rate: float = 0.2,
+    use_mixed_precision: bool = False
+) -> tf.keras.Model:
+    """
+    Create model with optional mixed precision support.
+    
+    This extends the existing create_model() function to support mixed precision training
+    for better performance, especially useful for adversarial training.
+    
+    Parameters:
+    -----------
+    model_type : str
+        Type of model to create ('dense' or 'deepsets')
+    input_shape : tuple
+        Shape of input data
+    hidden_units : list of int
+        Sizes of hidden layers
+    dropout_rate : float
+        Dropout rate for regularization
+    use_mixed_precision : bool
+        Whether to enable mixed precision training
+        
+    Returns:
+    --------
+    tf.keras.Model
+        Model with optional mixed precision support
+    """
+    
+    # Set up mixed precision policy if requested
+    if use_mixed_precision:
+        policy = mixed_precision.Policy('mixed_float16')
+        mixed_precision.set_global_policy(policy)
+    
+    # Create model using existing factory function
+    model = create_model(model_type, input_shape, hidden_units, dropout_rate)
+    
+    # Ensure output layer uses float32 for numerical stability in mixed precision
+    if use_mixed_precision:
+        # Get the last layer (should be the output layer)
+        if hasattr(model.layers[-1], 'dtype_policy'):
+            from tensorflow.keras import layers
+            
+            # For Sequential models (Dense architecture)
+            if isinstance(model, Sequential):
+                last_layer = model.layers[-1]
+                if isinstance(last_layer, layers.Dense):
+                    # Replace the last layer with a float32 version
+                    model.layers[-1] = layers.Dense(
+                        units=last_layer.units,
+                        activation=last_layer.activation,
+                        dtype='float32',
+                        name=last_layer.name + '_float32' if last_layer.name else 'output_float32'
+                    )
+            
+            # For Functional API models (DeepSets architecture) 
+            else:
+                # The output layer should already be float32 by default in most cases
+                # If needed, we could reconstruct the model with explicit float32 output
+                pass
     
     return model
