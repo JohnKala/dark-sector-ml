@@ -646,10 +646,25 @@ def run_sensitivity_analysis(
         # The cross-evaluation results use the model names as keys, which include 'model_' prefix
         dataset_to_crosseval = {}
         for ds_name in dataset_names:
+            # First try to find an exact match with 'model_' prefix
+            model_key = f"model_{ds_name}"
+            if model_key in individual_cross_eval:
+                dataset_to_crosseval[ds_name] = model_key
+                continue
+                
+            # If no exact match, try to find a partial match
             for model_name in individual_cross_eval.keys():
                 if ds_name in model_name:  # If dataset name is part of the model name
                     dataset_to_crosseval[ds_name] = model_name
                     break
+        
+        # Create plots directory if it doesn't exist
+        plots_dir = os.path.join(actual_output_dir, "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        if verbose:
+            print(f"Plots directory created: {plots_dir}")
+            print(f"Dataset to cross-eval mapping: {dataset_to_crosseval}")
+            print(f"Available cross-eval keys: {list(individual_cross_eval.keys())[:3]}...")
         
         comparison_count = 0
         for dataset_name in dataset_names:
