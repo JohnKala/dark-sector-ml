@@ -675,15 +675,21 @@ def run_sensitivity_analysis(
                     if verbose:
                         print(f"  ⚠ Warning: Could not find matching model for dataset {dataset_name}")
                     continue
+                
+                # Combine individual and LOO cross-evaluation results for plotting
+                combined_cross_eval = dict(individual_cross_eval)
+                if loo_cross_eval:
+                    # Make sure we don't overwrite any keys
+                    for model, evals in loo_cross_eval.items():
+                        combined_cross_eval[model] = evals
                     
                 plot_dataset_comparison_models(
                     individual_results=individual_results,
-                    individual_cross_eval=individual_cross_eval,
+                    individual_cross_eval=combined_cross_eval,  # Use combined results
                     target_dataset=model_key,  # Use the model key instead of dataset name
                     loo_results=loo_results,
                     loo_cross_eval=loo_cross_eval,
-                    save_path=f"{actual_output_dir}/plots/dataset_comparison_{dataset_name}.png",
-                    sm_accuracy=0.79  # Could be made configurable
+                    save_path=f"{actual_output_dir}/plots/dataset_comparison_{dataset_name}.png"
                 )
                 comparison_count += 1
                 if verbose:

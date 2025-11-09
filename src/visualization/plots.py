@@ -456,8 +456,7 @@ def plot_dataset_comparison_models(
     loo_results: Optional[Dict[str, Any]] = None,
     loo_cross_eval: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
     save_path: str = None,
-    figsize: Tuple[int, int] = (12, 10),
-    sm_accuracy: float = 0.79
+    figsize: Tuple[int, int] = (12, 10)
 ) -> plt.Figure:
     """
     Create a specialized plot showing multiple models evaluated on one target dataset.
@@ -581,18 +580,21 @@ def plot_dataset_comparison_models(
             results['individual_eval'], 
             "Model trained on"
         )
-    
+        
     # 3. Plot leave-one-out model if available
-    if 'leave_one_out' in results and 'leave_one_out_eval' in results:
-        loo_model_name = next((name for name in results['leave_one_out'].keys() 
-                               if target_dataset in name), None)
+    if loo_results and loo_cross_eval:
+        # Find the LOO model for this dataset
+        target_dataset_base = target_dataset.replace('model_', '')
+        loo_model_name = next((name for name in loo_results.keys() 
+                              if target_dataset_base in name), None)
         
         if loo_model_name:
             loo_style = {"color": "black", "linestyle": "-.", "linewidth": 2.5}
+                
             plot_model_on_dataset(
                 loo_model_name, 
-                target_dataset, 
-                results['leave_one_out_eval'], 
+                target_dataset_base,  # LOO datasets might have different naming
+                loo_cross_eval,  # Use LOO cross-eval results
                 "Leave-one-out model:", 
                 loo_style
             )
@@ -608,7 +610,7 @@ def plot_dataset_comparison_models(
     
     # Set title
     display_name = format_model_name(target_dataset)
-    title = f'Model Comparison on {display_name} Dataset (SM accuracy: {sm_accuracy:.2f})'
+    title = f'Model Comparison on {display_name} Dataset'
     ax.set_title(title)
     
     # Add legend and grid
