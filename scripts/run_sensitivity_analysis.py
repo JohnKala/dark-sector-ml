@@ -641,17 +641,33 @@ def run_sensitivity_analysis(
         
         if verbose:
             print(f"Generating dataset comparison plots for {len(dataset_names)} datasets...")
+            
+        # Fix: Create a mapping between dataset names and cross-evaluation keys
+        # The cross-evaluation results use the model names as keys, which include 'model_' prefix
+        dataset_to_crosseval = {}
+        for ds_name in dataset_names:
+            for model_name in individual_cross_eval.keys():
+                if ds_name in model_name:  # If dataset name is part of the model name
+                    dataset_to_crosseval[ds_name] = model_name
+                    break
         
         comparison_count = 0
         for dataset_name in dataset_names:
             try:
+                # Get the corresponding model name for this dataset
+                model_key = dataset_to_crosseval.get(dataset_name)
+                if not model_key:
+                    if verbose:
+                        print(f"  ⚠ Warning: Could not find matching model for dataset {dataset_name}")
+                    continue
+                    
                 plot_dataset_comparison_models(
                     individual_results=individual_results,
                     individual_cross_eval=individual_cross_eval,
-                    target_dataset=dataset_name,
+                    target_dataset=model_key,  # Use the model key instead of dataset name
                     loo_results=loo_results,
                     loo_cross_eval=loo_cross_eval,
-                    save_path=f"{actual_output_dir}/dataset_comparison_{dataset_name}.png",
+                    save_path=f"{actual_output_dir}/plots/dataset_comparison_{dataset_name}.png",
                     sm_accuracy=0.79  # Could be made configurable
                 )
                 comparison_count += 1
