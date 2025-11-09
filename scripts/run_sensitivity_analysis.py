@@ -16,9 +16,11 @@ import argparse
 import os
 import sys
 import time
-from datetime import datetime
+import json
+import argparse
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from datetime import datetime
+from typing import Dict, Any, List, Tuple, Optional
 import numpy as np
 
 # Add project root to path for imports
@@ -186,7 +188,12 @@ def generate_analysis_summary(
     individual_cross_eval: Dict[str, Dict[str, Dict[str, Any]]],
     loo_results: Optional[Dict[str, Any]] = None,
     loo_cross_eval: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
-    output_dir: str = 'outputs'
+    output_dir: str = 'outputs',
+    model_type: str = 'deepsets',
+    epochs: int = 50,
+    use_scaled: bool = True,
+    normalize: bool = True,
+    adversarial_config: Optional[Dict[str, Any]] = None
 ) -> None:
     """
     Generate analysis summary using our robust data structures.
@@ -196,6 +203,21 @@ def generate_analysis_summary(
     with open(summary_file, 'w') as f:
         f.write("# Dark Sector Sensitivity Analysis Summary\n\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        # Configuration summary
+        f.write("## Configuration\n\n")
+        f.write(f"- Model type: {model_type}\n")
+        f.write(f"- Epochs: {epochs}\n")
+        f.write(f"- Features: {'scaled' if use_scaled else 'raw'}, {'normalized' if normalize else 'unnormalized'}\n")
+        
+        # Add adversarial configuration if present
+        if adversarial_config:
+            f.write("\n### Adversarial Training Enabled\n\n")
+            f.write(f"- Gradient iterations: {adversarial_config.get('grad_iter', 3)}\n")
+            f.write(f"- Initial noise: {adversarial_config.get('grad_eps', 1e-6)}\n")
+            f.write(f"- Step size: {adversarial_config.get('grad_eta', 2e-4)}\n")
+            f.write(f"- KL weight (alpha): {adversarial_config.get('alpha', 5.0)}\n")
+        f.write("\n")
         
         # Individual models summary
         f.write("## Individual Models Performance\n\n")
@@ -277,7 +299,8 @@ def run_sensitivity_analysis(
     save_models: bool = True,
     verbose: bool = True,
     create_run_subdir: bool = True,
-    generate_dataset_comparisons: bool = True
+    generate_dataset_comparisons: bool = True,
+    adversarial_config: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Run comprehensive sensitivity analysis using our robust pipeline functions.
@@ -288,6 +311,39 @@ def run_sensitivity_analysis(
     - Avoids fragile string matching
     - Reuses evaluation results efficiently
     - Creates timestamped subdirectories for organized output
+    - Supports adversarial training with configurable parameters
+    
+    Parameters:
+    -----------
+    dataset_files : list of str
+        List of dataset files to analyze
+    output_dir : str
+        Base output directory
+    use_scaled : bool
+        Whether to use scaled features
+    normalize : bool
+        Whether to normalize features
+    model_type : str
+        Model architecture ('dense' or 'deepsets')
+    epochs : int
+        Maximum training epochs
+    batch_size : int
+        Training batch size
+    run_individual : bool
+        Whether to run individual model training
+    run_leave_one_out : bool
+        Whether to run leave-one-out training
+    save_models : bool
+        Whether to save model weights
+    verbose : bool
+        Whether to print progress
+    create_run_subdir : bool
+        Whether to create a timestamped run subdirectory
+    generate_dataset_comparisons : bool
+        Whether to generate dataset comparison plots
+    adversarial_config : dict, optional
+        Configuration for adversarial training. If provided, enables adversarial training.
+        Example: {'grad_iter': 3, 'grad_eps': 1e-6, 'grad_eta': 2e-4, 'alpha': 5.0}
     """
     
     # Create timestamped run subdirectory if requested
@@ -298,6 +354,8 @@ def run_sensitivity_analysis(
             run_name += "_raw"
         if not normalize:
             run_name += "_unnorm"
+        if adversarial_config:
+            run_name += "_adversarial"
         if not run_individual:
             run_name += "_noindiv"
         if not run_leave_one_out:
@@ -369,7 +427,8 @@ def run_sensitivity_analysis(
             batch_size=batch_size,
             output_dir=actual_output_dir,
             save_model=save_models,
-            verbose=verbose
+            verbose=verbose,
+            adversarial_config=adversarial_config
         )
         
         results['individual_models'] = individual_results
@@ -474,7 +533,8 @@ def run_sensitivity_analysis(
             batch_size=batch_size,
             output_dir=actual_output_dir,
             save_model=save_models,
-            verbose=verbose
+            verbose=verbose,
+            adversarial_config=adversarial_config
         )
         
         results['leave_one_out_models'] = loo_results
@@ -617,7 +677,12 @@ def run_sensitivity_analysis(
         generate_analysis_summary(
             individual_results, individual_cross_eval,
             loo_results, loo_cross_eval,
-            actual_output_dir
+            actual_output_dir,
+            model_type=model_type,
+            epochs=epochs,
+            use_scaled=use_scaled,
+            normalize=normalize,
+            adversarial_config=adversarial_config
         )
     
     if verbose:
@@ -665,6 +730,14 @@ def main():
     parser.add_argument('--no-run-subdir', action='store_true',
                        help='Do not create timestamped run subdirectory')
     
+    # Adversarial training arguments
+    parser.add_argument('--adversarial', action='store_true',
+                       help='Enable adversarial training')
+    parser.add_argument('--adversarial-alpha', type=float, default=5.0,
+                       help='Weight for adversarial KL loss (default: 5.0)')
+    parser.add_argument('--adversarial-iterations', type=int, default=3,
+                       help='Number of adversarial gradient iterations (default: 3)')
+    
     args = parser.parse_args()
     
     # Find dataset files
@@ -677,6 +750,18 @@ def main():
     if not dataset_files:
         print(f"Error: No .h5 files found in {dataset_dir}")
         sys.exit(1)
+    
+    # Create adversarial config if enabled
+    adversarial_config = None
+    if args.adversarial:
+        adversarial_config = {
+            'grad_iter': args.adversarial_iterations,
+            'grad_eps': 1e-6,  # Default initial noise
+            'grad_eta': 2e-4,  # Default step size
+            'alpha': args.adversarial_alpha
+        }
+        if not args.quiet:
+            print(f"Adversarial training enabled with config: {adversarial_config}")
     
     # Run analysis
     try:
@@ -693,7 +778,8 @@ def main():
             save_models=not args.no_save_models,
             verbose=not args.quiet,
             create_run_subdir=not args.no_run_subdir,
-            generate_dataset_comparisons=not args.no_dataset_comparison
+            generate_dataset_comparisons=not args.no_dataset_comparison,
+            adversarial_config=adversarial_config
         )
     except Exception as e:
         print(f"Error: {e}")
