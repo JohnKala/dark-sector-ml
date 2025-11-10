@@ -313,7 +313,7 @@ def _train_adversarial_model(
     
     # Training history
     history = {
-        'loss': [], 
+        'total_loss': [], 
         'ce_loss': [], 
         'kl_loss': [], 
         'val_loss': []
@@ -331,7 +331,7 @@ def _train_adversarial_model(
     # Main adversarial training loop (from Block 1, integrated with existing patterns)
     for epoch in range(epochs):
         # Training phase
-        epoch_losses = {'loss': [], 'ce_loss': [], 'kl_loss': []}
+        epoch_losses = {'total_loss': [], 'ce_loss': [], 'kl_loss': []}
         
         for features, masks, labels in train_dataset:
             # Convert to float16 if using mixed precision (from Block 1)
