@@ -512,6 +512,13 @@ def plot_dataset_comparison_models(
         elif isinstance(model_results, dict) and 'cross_results' in model_results:
             dataset_results = model_results['cross_results'].get(dataset_name)
         
+        # If not found, try with different prefixes/formats
+        if not dataset_results and dataset_name.startswith('loo_'):
+            # Try without 'loo_' prefix
+            alt_name = dataset_name[4:]
+            if alt_name in model_results:
+                dataset_results = model_results[alt_name]
+        
         if not dataset_results:
             print(f"No results found for {model_name} on {dataset_name}")
             return None
@@ -585,15 +592,24 @@ def plot_dataset_comparison_models(
     if loo_results and loo_cross_eval:
         # Find the LOO model for this dataset
         target_dataset_base = target_dataset.replace('model_', '')
+        
+        # Try with 'loo_' prefix first (this is how LOO datasets are named)
+        loo_dataset_name = f"loo_{target_dataset_base}"
         loo_model_name = next((name for name in loo_results.keys() 
-                              if target_dataset_base in name), None)
+                              if loo_dataset_name in name), None)
+        
+        # If not found, try without prefix
+        if not loo_model_name:
+            loo_model_name = next((name for name in loo_results.keys() 
+                                if target_dataset_base in name), None)
         
         if loo_model_name:
             loo_style = {"color": "black", "linestyle": "-.", "linewidth": 2.5}
-                
+            
+            # Use loo_model_name for lookup in loo_cross_eval
             plot_model_on_dataset(
                 loo_model_name, 
-                target_dataset_base,  # LOO datasets might have different naming
+                loo_model_name,  # Use the LOO model name as the dataset name
                 loo_cross_eval,  # Use LOO cross-eval results
                 "Leave-one-out model:", 
                 loo_style
