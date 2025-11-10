@@ -370,26 +370,42 @@ def plot_training_history(
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     
     # Plot training & validation loss
-    ax1.plot(history['loss'], label='Training Loss')
-    ax1.plot(history['val_loss'], label='Validation Loss')
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.set_title('Training and Validation Loss')
-    ax1.legend()
-    ax1.grid(alpha=0.3)
+    # Handle both 'loss' and 'total_loss' keys for compatibility with adversarial training
+    loss_key = 'total_loss' if 'total_loss' in history else 'loss'
     
-    # Plot training & validation accuracy
+    if loss_key in history:
+        ax1.plot(history[loss_key], label='Training Loss')
+        ax1.plot(history['val_loss'], label='Validation Loss')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.set_title('Training and Validation Loss')
+        ax1.legend()
+        ax1.grid(alpha=0.3)
+    
+    # Plot training & validation accuracy if available
     acc_key = 'accuracy' if 'accuracy' in history else 'acc'
     val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
     
-    #ax2.plot(history['val_auc'], label='Validation AUC')  
-    ax2.plot(history[acc_key], label='Training Accuracy')
-    ax2.plot(history[val_acc_key], label='Validation Accuracy')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy')
-    ax2.set_title('Training and Validation Accuracy')
-    ax2.legend()
-    ax2.grid(alpha=0.3)
+    # Check if accuracy metrics exist in history (they might not for adversarial models)
+    if acc_key in history and val_acc_key in history:
+        ax2.plot(history[acc_key], label='Training Accuracy')
+        ax2.plot(history[val_acc_key], label='Validation Accuracy')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Accuracy')
+        ax2.set_title('Training and Validation Accuracy')
+        ax2.legend()
+        ax2.grid(alpha=0.3)
+    else:
+        # If no accuracy metrics, plot CE loss and KL loss for adversarial models
+        if 'ce_loss' in history and 'kl_loss' in history:
+            ax2.plot(history['ce_loss'], label='CE Loss')
+            ax2.plot(history['kl_loss'], label='KL Loss')
+            ax2.set_xlabel('Epoch')
+            ax2.set_ylabel('Loss Component')
+            ax2.set_title('Loss Components')
+            ax2.legend()
+            ax2.grid(alpha=0.3)
+    # Title, legend, and grid are already set in the conditional blocks
     
     # Set overall title
     if title is None:
