@@ -63,9 +63,17 @@ class AdversarialLoss:
         ce_loss = self.cross_entropy(labels_fp32, pred_orig_fp32)
         
         # KL divergence between original and adversarial predictions
-        pred_orig_dist = tf.concat([1-pred_orig_fp32, pred_orig_fp32], axis=1)
-        pred_adv_dist = tf.concat([1-pred_adv_fp32, pred_adv_fp32], axis=1)
-        kl_loss = self.kl_div(pred_orig_dist, pred_adv_dist)
+        # Memory-optimized implementation
+        pred_orig_0 = 1-pred_orig_fp32
+        pred_orig_1 = pred_orig_fp32
+        pred_adv_0 = 1-pred_adv_fp32
+        pred_adv_1 = pred_adv_fp32
+        
+        # Manual KL calculation to avoid large tensor concatenations
+        epsilon = 1e-7  # Small constant for numerical stability
+        kl_0 = pred_orig_0 * tf.math.log(pred_orig_0 / (pred_adv_0 + epsilon) + epsilon)
+        kl_1 = pred_orig_1 * tf.math.log(pred_orig_1 / (pred_adv_1 + epsilon) + epsilon)
+        kl_loss = tf.reduce_mean(kl_0 + kl_1)
         
         # Combined loss
         total_loss = ce_loss + self.alpha * kl_loss
@@ -103,7 +111,7 @@ class AdversarialExampleGenerator:
         self.grad_eta = grad_eta
         self.kl_div = tf.keras.losses.KLDivergence()
     
-    @tf.function(jit_compile=True)
+    @tf.function  # Removed jit_compile=True to reduce memory usage
     def generate_adversarial_examples(
         self,
         model: tf.keras.Model,
@@ -152,10 +160,18 @@ class AdversarialExampleGenerator:
                 output_orig_fp32 = tf.cast(output_original, tf.float32)
                 output_adv_fp32 = tf.cast(output_adv, tf.float32)
                 
-                # Calculate KL divergence (from Block 1)
-                pred_orig_dist = tf.concat([1-output_orig_fp32, output_orig_fp32], axis=1)
-                pred_adv_dist = tf.concat([1-output_adv_fp32, output_adv_fp32], axis=1)
-                kl_loss = self.kl_div(pred_orig_dist, pred_adv_dist)
+                # Calculate KL divergence with memory optimization
+                # Avoid large concatenations that consume memory
+                pred_orig_0 = 1-output_orig_fp32
+                pred_orig_1 = output_orig_fp32
+                pred_adv_0 = 1-output_adv_fp32
+                pred_adv_1 = output_adv_fp32
+                
+                # Manual KL calculation to avoid large tensor concatenations
+                epsilon = 1e-7  # Small constant for numerical stability
+                kl_0 = pred_orig_0 * tf.math.log(pred_orig_0 / (pred_adv_0 + epsilon) + epsilon)
+                kl_1 = pred_orig_1 * tf.math.log(pred_orig_1 / (pred_adv_1 + epsilon) + epsilon)
+                kl_loss = tf.reduce_mean(kl_0 + kl_1)
             
             # Compute gradients and update adversarial examples (from Block 1)
             gradients = tape.gradient(kl_loss, features_adv)
@@ -213,7 +229,7 @@ class AdversarialModelWrapper:
         """Print model summary."""
         return self.base_model.summary(**kwargs)
     
-    @tf.function(jit_compile=True)
+    @tf.function  # Removed jit_compile=True to reduce memory usage
     def adversarial_train_step(
         self, 
         features: tf.Tensor, 
@@ -264,7 +280,7 @@ class AdversarialModelWrapper:
         
         return loss_dict
     
-    @tf.function(jit_compile=True)
+    @tf.function  # Removed jit_compile=True to reduce memory usage
     def validation_step(
         self, 
         features: tf.Tensor, 

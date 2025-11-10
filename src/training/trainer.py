@@ -115,10 +115,10 @@ def train_model(
         if verbose:
             print(f"Creating adversarial model with config: {adversarial_config}")
         
-        # Adjust batch size for adversarial training (performance optimization from Block 1)
-        adversarial_batch_size = max(batch_size * 2, 512)
+        # Use a more conservative batch size for adversarial training to avoid OOM errors
+        adversarial_batch_size = min(batch_size, 256)  # Reduced to avoid memory issues
         if verbose and adversarial_batch_size != batch_size:
-            print(f"Batch size increased to {adversarial_batch_size} for adversarial training")
+            print(f"Batch size adjusted to {adversarial_batch_size} for adversarial training")
         
         # Create adversarial model using our new architecture
         model = create_adversarial_model(

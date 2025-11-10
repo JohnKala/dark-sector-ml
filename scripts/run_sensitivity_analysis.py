@@ -791,8 +791,9 @@ def main():
     # Create adversarial config if enabled
     adversarial_config = None
     if args.adversarial:
+        # Use more memory-efficient defaults
         adversarial_config = {
-            'grad_iter': args.adversarial_iterations,
+            'grad_iter': min(args.adversarial_iterations, 2),  # Limit to 2 iterations max to reduce memory usage
             'grad_eps': 1e-6,  # Default initial noise
             'grad_eta': 2e-4,  # Default step size
             'alpha': args.adversarial_alpha
