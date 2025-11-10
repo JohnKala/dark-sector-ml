@@ -71,7 +71,26 @@ def evaluate_cross_model_performance(
             
             # Get ground truth and predictions
             y_true = ds_data['test']['labels']
-            y_pred_proba = model.predict(test_inputs, verbose=0).ravel()
+            raw_preds = model.predict(test_inputs, verbose=0)
+            
+            # Check for issues with predictions
+            if raw_preds is None or len(raw_preds) == 0:
+                print(f"WARNING: Empty predictions for {model_name} on {ds_name}")
+                continue
+                
+            # Check if all predictions are the same value
+            y_pred_proba = raw_preds.ravel()
+            if len(np.unique(y_pred_proba)) <= 1:
+                print(f"WARNING: All predictions are identical ({y_pred_proba[0]}) for {model_name} on {ds_name}")
+                # Add a tiny bit of noise to avoid ROC calculation issues
+                y_pred_proba = y_pred_proba + np.random.normal(0, 1e-5, size=y_pred_proba.shape)
+                y_pred_proba = np.clip(y_pred_proba, 0, 1)
+            
+            # Check for NaN values
+            if np.isnan(y_pred_proba).any():
+                print(f"WARNING: NaN predictions for {model_name} on {ds_name}, replacing with 0.5")
+                y_pred_proba = np.nan_to_num(y_pred_proba, nan=0.5)
+            
             y_pred = (y_pred_proba >= threshold).astype(int)
             
             # Calculate metrics

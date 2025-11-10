@@ -216,25 +216,56 @@ class AdversarialModelWrapper:
         """Prediction method for compatibility with Keras API."""
         # Handle both single input and [features, masks] format
         try:
+            # Convert inputs to numpy arrays if they're TensorFlow tensors
+            # This ensures we're working with concrete values
             if isinstance(inputs, list) and len(inputs) == 2:
                 # Standard case: [features, masks]
                 features, masks = inputs
-                # Ensure no NaNs in the inputs
-                features = tf.where(tf.math.is_nan(features), tf.zeros_like(features), features)
-                masks = tf.where(tf.math.is_nan(masks), tf.ones_like(masks), masks)
+                
+                # Convert to numpy if they're TensorFlow tensors
+                if hasattr(features, 'numpy'):
+                    features = features.numpy()
+                if hasattr(masks, 'numpy'):
+                    masks = masks.numpy()
+                    
+                # Only replace NaNs if absolutely necessary
+                if np.isnan(features).any():
+                    print("Warning: NaN values found in features, replacing with zeros")
+                    features = np.nan_to_num(features, nan=0.0)
+                    
+                if np.isnan(masks).any():
+                    print("Warning: NaN values found in masks, replacing with ones")
+                    masks = np.nan_to_num(masks, nan=1.0)
+                    
+                # Make the prediction
                 return self.base_model.predict([features, masks], verbose=verbose)
             else:
                 # For compatibility with the evaluation code that might pass just features
-                # We need to handle this case by assuming masks are all ones
-                # This is a fallback for the cross-evaluation code
                 features = inputs
-                # Ensure no NaNs in the inputs
-                features = tf.where(tf.math.is_nan(features), tf.zeros_like(features), features)
+                
+                # Convert to numpy if it's a TensorFlow tensor
+                if hasattr(features, 'numpy'):
+                    features = features.numpy()
+                    
+                # Only replace NaNs if absolutely necessary
+                if np.isnan(features).any():
+                    print("Warning: NaN values found in features, replacing with zeros")
+                    features = np.nan_to_num(features, nan=0.0)
+                
+                # Create masks based on the feature shape
                 batch_size = features.shape[0]
-                masks = tf.ones((batch_size, features.shape[1] // 3), dtype=tf.float32)
+                feature_dim = features.shape[1]
+                
+                # For DeepSets, the mask should have shape (batch_size, n_particles)
+                # where n_particles = feature_dim / 3 (since each particle has 3 features)
+                n_particles = feature_dim // 3
+                masks = np.ones((batch_size, n_particles), dtype=np.float32)
+                
+                # Make the prediction
                 return self.base_model.predict([features, masks], verbose=verbose)
         except Exception as e:
-            print(f"Warning: Error in predict method: {e}")
+            print(f"ERROR in predict method: {e}")
+            print(f"This is a critical error that will result in random predictions!")
             print(f"Input type: {type(inputs)}")
             if isinstance(inputs, list):
                 print(f"List length: {len(inputs)}")
@@ -242,14 +273,20 @@ class AdversarialModelWrapper:
                     print(f"Item {i} type: {type(item)}, shape: {getattr(item, 'shape', 'unknown')}")
             else:
                 print(f"Input shape: {getattr(inputs, 'shape', 'unknown')}")
-            # Return zeros as a fallback
+                
+            # Instead of returning zeros, we'll return random predictions
+            # This will make it obvious something is wrong (AUC = 0.5)
+            # but at least the pipeline won't crash
             if isinstance(inputs, list) and len(inputs) > 0 and hasattr(inputs[0], 'shape'):
                 batch_size = inputs[0].shape[0]
             elif hasattr(inputs, 'shape'):
                 batch_size = inputs.shape[0]
             else:
                 batch_size = 1
-            return np.zeros((batch_size, 1))
+                
+            # Return random values between 0 and 1
+            print("Returning random predictions as fallback!")
+            return np.random.random((batch_size, 1))
     
     @property
     def trainable_variables(self):
