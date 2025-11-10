@@ -212,6 +212,19 @@ class AdversarialModelWrapper:
         """Forward pass through base model."""
         return self.base_model(inputs, training=training)
     
+    def predict(self, inputs, verbose=0):
+        """Prediction method for compatibility with Keras API."""
+        # Handle both single input and [features, masks] format
+        if isinstance(inputs, list):
+            return self.base_model.predict(inputs, verbose=verbose)
+        else:
+            # For compatibility with the evaluation code that might pass just features
+            # We need to handle this case by assuming masks are all ones
+            # This is a fallback for the cross-evaluation code
+            batch_size = inputs.shape[0]
+            masks = tf.ones((batch_size, inputs.shape[1] // 3), dtype=tf.float32)
+            return self.base_model.predict([inputs, masks], verbose=verbose)
+    
     @property
     def trainable_variables(self):
         """Access trainable variables of the base model."""
@@ -228,6 +241,23 @@ class AdversarialModelWrapper:
     def summary(self, **kwargs):
         """Print model summary."""
         return self.base_model.summary(**kwargs)
+        
+    # Additional compatibility methods for evaluation
+    
+    @property
+    def input(self):
+        """Access input of the base model."""
+        return self.base_model.input
+        
+    @property
+    def output(self):
+        """Access output of the base model."""
+        return self.base_model.output
+        
+    @property
+    def input_shape(self):
+        """Access input shape of the base model."""
+        return self.base_model.input_shape
     
     @tf.function  # Removed jit_compile=True to reduce memory usage
     def adversarial_train_step(
