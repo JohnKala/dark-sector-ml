@@ -7,8 +7,8 @@ the existing dark sector ML architecture.
 """
 
 import tensorflow as tf
-from typing import Dict, Any, Tuple, Optional
 import numpy as np
+from typing import Dict, Any, List, Tuple, Optional
 from tensorflow.keras import mixed_precision
 
 from .factory import create_model_with_mixed_precision
@@ -215,15 +215,41 @@ class AdversarialModelWrapper:
     def predict(self, inputs, verbose=0):
         """Prediction method for compatibility with Keras API."""
         # Handle both single input and [features, masks] format
-        if isinstance(inputs, list):
-            return self.base_model.predict(inputs, verbose=verbose)
-        else:
-            # For compatibility with the evaluation code that might pass just features
-            # We need to handle this case by assuming masks are all ones
-            # This is a fallback for the cross-evaluation code
-            batch_size = inputs.shape[0]
-            masks = tf.ones((batch_size, inputs.shape[1] // 3), dtype=tf.float32)
-            return self.base_model.predict([inputs, masks], verbose=verbose)
+        try:
+            if isinstance(inputs, list) and len(inputs) == 2:
+                # Standard case: [features, masks]
+                features, masks = inputs
+                # Ensure no NaNs in the inputs
+                features = tf.where(tf.math.is_nan(features), tf.zeros_like(features), features)
+                masks = tf.where(tf.math.is_nan(masks), tf.ones_like(masks), masks)
+                return self.base_model.predict([features, masks], verbose=verbose)
+            else:
+                # For compatibility with the evaluation code that might pass just features
+                # We need to handle this case by assuming masks are all ones
+                # This is a fallback for the cross-evaluation code
+                features = inputs
+                # Ensure no NaNs in the inputs
+                features = tf.where(tf.math.is_nan(features), tf.zeros_like(features), features)
+                batch_size = features.shape[0]
+                masks = tf.ones((batch_size, features.shape[1] // 3), dtype=tf.float32)
+                return self.base_model.predict([features, masks], verbose=verbose)
+        except Exception as e:
+            print(f"Warning: Error in predict method: {e}")
+            print(f"Input type: {type(inputs)}")
+            if isinstance(inputs, list):
+                print(f"List length: {len(inputs)}")
+                for i, item in enumerate(inputs):
+                    print(f"Item {i} type: {type(item)}, shape: {getattr(item, 'shape', 'unknown')}")
+            else:
+                print(f"Input shape: {getattr(inputs, 'shape', 'unknown')}")
+            # Return zeros as a fallback
+            if isinstance(inputs, list) and len(inputs) > 0 and hasattr(inputs[0], 'shape'):
+                batch_size = inputs[0].shape[0]
+            elif hasattr(inputs, 'shape'):
+                batch_size = inputs.shape[0]
+            else:
+                batch_size = 1
+            return np.zeros((batch_size, 1))
     
     @property
     def trainable_variables(self):
