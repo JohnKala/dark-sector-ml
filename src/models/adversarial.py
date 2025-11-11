@@ -8,6 +8,7 @@ the existing dark sector ML architecture.
 
 import tensorflow as tf
 import numpy as np
+import warnings
 from typing import Dict, Any, List, Tuple, Optional
 from tensorflow.keras import mixed_precision
 
@@ -63,17 +64,8 @@ class AdversarialLoss:
         ce_loss = self.cross_entropy(labels_fp32, pred_orig_fp32)
         
         # KL divergence between original and adversarial predictions
-        # Memory-optimized implementation
-        pred_orig_0 = 1-pred_orig_fp32
-        pred_orig_1 = pred_orig_fp32
-        pred_adv_0 = 1-pred_adv_fp32
-        pred_adv_1 = pred_adv_fp32
-        
-        # Manual KL calculation to avoid large tensor concatenations
-        epsilon = 1e-7  # Small constant for numerical stability
-        kl_0 = pred_orig_0 * tf.math.log(pred_orig_0 / (pred_adv_0 + epsilon) + epsilon)
-        kl_1 = pred_orig_1 * tf.math.log(pred_orig_1 / (pred_adv_1 + epsilon) + epsilon)
-        kl_loss = tf.reduce_mean(kl_0 + kl_1)
+        # Use standard direction (original → adversarial) as in professor's code
+        kl_loss = self.kl_div(pred_orig_fp32, pred_adv_fp32)
         
         # Combined loss
         total_loss = ce_loss + self.alpha * kl_loss
@@ -90,7 +82,7 @@ class AdversarialExampleGenerator:
     
     def __init__(
         self,
-        grad_iter: int = 3,
+        grad_iter: int = 10,  # Changed from 3 to 10 to match professor's code
         grad_eps: float = 1e-6,
         grad_eta: float = 2e-4
     ):
@@ -100,7 +92,7 @@ class AdversarialExampleGenerator:
         Parameters:
         -----------
         grad_iter : int
-            Number of gradient iterations for adversarial refinement
+            Number of gradient iterations for adversarial refinement (default: 10)
         grad_eps : float
             Standard deviation for initial noise
         grad_eta : float
@@ -160,18 +152,8 @@ class AdversarialExampleGenerator:
                 output_orig_fp32 = tf.cast(output_original, tf.float32)
                 output_adv_fp32 = tf.cast(output_adv, tf.float32)
                 
-                # Calculate KL divergence with memory optimization
-                # Avoid large concatenations that consume memory
-                pred_orig_0 = 1-output_orig_fp32
-                pred_orig_1 = output_orig_fp32
-                pred_adv_0 = 1-output_adv_fp32
-                pred_adv_1 = output_adv_fp32
-                
-                # Manual KL calculation to avoid large tensor concatenations
-                epsilon = 1e-7  # Small constant for numerical stability
-                kl_0 = pred_orig_0 * tf.math.log(pred_orig_0 / (pred_adv_0 + epsilon) + epsilon)
-                kl_1 = pred_orig_1 * tf.math.log(pred_orig_1 / (pred_adv_1 + epsilon) + epsilon)
-                kl_loss = tf.reduce_mean(kl_0 + kl_1)
+                # Use standard KL direction (original → adversarial) as in professor's code
+                kl_loss = self.kl_div(output_orig_fp32, output_adv_fp32)
             
             # Compute gradients and update adversarial examples (from Block 1)
             gradients = tape.gradient(kl_loss, features_adv)
@@ -381,7 +363,7 @@ class AdversarialModelWrapper:
         labels: tf.Tensor
     ) -> Dict[str, tf.Tensor]:
         """
-        Perform validation step (from Block 1).
+        Perform validation step with detailed metrics.
         
         Parameters:
         -----------
@@ -395,7 +377,7 @@ class AdversarialModelWrapper:
         Returns:
         --------
         dict
-            Dictionary containing validation metrics
+            Dictionary containing detailed validation metrics
         """
         # Forward pass in inference mode
         pred = self.base_model([features, masks], training=False)
@@ -406,7 +388,13 @@ class AdversarialModelWrapper:
         
         # Compute validation loss
         ce_loss = tf.keras.losses.BinaryCrossentropy()(labels_reshaped, pred)
-        return {'val_loss': ce_loss}
+        
+        # Return more detailed metrics for consistency with professor's code
+        return {
+            'val_loss': ce_loss, 
+            'val_ce_loss': ce_loss, 
+            'val_kl_loss': tf.zeros_like(ce_loss)  # For consistency
+        }
 
 
 def create_adversarial_model(
@@ -443,20 +431,38 @@ def create_adversarial_model(
     AdversarialModelWrapper
         Model with adversarial training capabilities
         
-    Raises:
-    -------
-    ValueError
-        If adversarial training is requested for unsupported architecture
+    Notes:
+    ------
+    While optimized for DeepSets architecture, this function will attempt to adapt
+    other model types to work with the adversarial training framework.
     """
     
-    # Validate model type (from Block 1 - DeepSets only constraint)
+    # Issue a warning instead of raising an error for non-DeepSets models
     if model_type.lower() != 'deepsets':
-        raise ValueError("Adversarial training currently only supports DeepSets architecture")
+        warnings.warn("Adversarial training is optimized for DeepSets architecture. "
+                     "Other architectures may not work correctly with attention masks.")
     
     # Create base model using existing infrastructure
     base_model = create_model_with_mixed_precision(
         model_type, input_shape, hidden_units, dropout_rate, use_mixed_precision
     )
+    
+    # For non-DeepSets models, ensure they can handle the input format
+    if model_type.lower() != 'deepsets':
+        # Create a wrapper model that can handle the [features, masks] input format
+        original_model = base_model
+        
+        inputs = tf.keras.layers.Input(shape=input_shape)
+        mask_inputs = tf.keras.layers.Input(shape=(input_shape[0],), dtype="bool")
+        
+        # For dense models, we need to flatten the input
+        if isinstance(original_model, tf.keras.Sequential):
+            # Just use the features and ignore the mask
+            outputs = original_model(inputs)
+            base_model = tf.keras.Model(inputs=[inputs, mask_inputs], outputs=outputs)
+            
+        # Log the adaptation
+        warnings.warn(f"Adapted {model_type} model for adversarial training input format")
     
     # Wrap with adversarial capabilities
     return AdversarialModelWrapper(base_model, adversarial_config)

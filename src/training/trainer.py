@@ -316,7 +316,9 @@ def _train_adversarial_model(
         'total_loss': [], 
         'ce_loss': [], 
         'kl_loss': [], 
-        'val_loss': []
+        'val_loss': [],
+        'val_ce_loss': [],
+        'val_kl_loss': []
     }
     
     # Create progress bar callback (reuse existing infrastructure)
@@ -350,12 +352,22 @@ def _train_adversarial_model(
         
         # Validation phase
         val_losses = []
+        val_ce_losses = []
+        val_kl_losses = []
+        
         for val_features, val_masks, val_labels in val_dataset:
             val_metrics = adversarial_model.validation_step(val_features, val_masks, val_labels)
             val_losses.append(val_metrics['val_loss'].numpy())
+            val_ce_losses.append(val_metrics['val_ce_loss'].numpy())
+            val_kl_losses.append(val_metrics['val_kl_loss'].numpy())
         
         val_loss = np.mean(val_losses)
+        val_ce_loss = np.mean(val_ce_losses)
+        val_kl_loss = np.mean(val_kl_losses)
+        
         epoch_metrics['val_loss'] = val_loss
+        epoch_metrics['val_ce_loss'] = val_ce_loss
+        epoch_metrics['val_kl_loss'] = val_kl_loss
         
         # Store in history
         for key, value in epoch_metrics.items():

@@ -772,8 +772,8 @@ def main():
                        help='Enable adversarial training')
     parser.add_argument('--adversarial-alpha', type=float, default=5.0,
                        help='Weight for adversarial KL loss (default: 5.0)')
-    parser.add_argument('--adversarial-iterations', type=int, default=3,
-                       help='Number of adversarial gradient iterations (default: 3)')
+    parser.add_argument('--adversarial-iterations', type=int, default=10,
+                       help='Number of adversarial gradient iterations (default: 10)')
     
     args = parser.parse_args()
     
@@ -791,9 +791,9 @@ def main():
     # Create adversarial config if enabled
     adversarial_config = None
     if args.adversarial:
-        # Use more memory-efficient defaults
+        # Use professor's recommended defaults with memory consideration
         adversarial_config = {
-            'grad_iter': min(args.adversarial_iterations, 2),  # Limit to 2 iterations max to reduce memory usage
+            'grad_iter': min(args.adversarial_iterations, 10),  # Use up to 10 iterations, but allow limiting for memory
             'grad_eps': 1e-6,  # Default initial noise
             'grad_eta': 2e-4,  # Default step size
             'alpha': args.adversarial_alpha
