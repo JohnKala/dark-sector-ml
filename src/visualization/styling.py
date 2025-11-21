@@ -4,7 +4,34 @@ Visualization styling utilities for consistent model plotting.
 
 import re
 import hashlib
+import matplotlib.pyplot as plt
 from typing import Dict, Any
+
+
+def set_plot_style():
+    """
+    Set consistent plot style for all visualizations.
+    """
+    # Use a clean, modern style
+    plt.style.use('seaborn-v0_8-whitegrid')
+    
+    # Set font sizes
+    plt.rcParams['font.size'] = 12
+    plt.rcParams['axes.labelsize'] = 14
+    plt.rcParams['axes.titlesize'] = 16
+    plt.rcParams['xtick.labelsize'] = 12
+    plt.rcParams['ytick.labelsize'] = 12
+    plt.rcParams['legend.fontsize'] = 12
+    
+    # Set figure properties
+    plt.rcParams['figure.figsize'] = (10, 6)
+    plt.rcParams['figure.dpi'] = 100
+    
+    # Set line properties
+    plt.rcParams['lines.linewidth'] = 2
+    
+    # Set grid properties
+    plt.rcParams['grid.alpha'] = 0.3
 
 
 def get_model_style(model_name: str) -> Dict[str, Any]:
