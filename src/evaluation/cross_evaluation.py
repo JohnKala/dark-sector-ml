@@ -193,7 +193,7 @@ def run_comparative_training(
     standard_model = standard_results['model']
     standard_eval = evaluate_model(
         model=standard_model,
-        test_data=prepared_data,
+        test_data=adapted_data,
         model_type=model_type,
         verbose=verbose
     )
@@ -203,7 +203,7 @@ def run_comparative_training(
         adversarial_model = adversarial_results['model']
         adversarial_eval = evaluate_model(
             model=adversarial_model,
-            test_data=prepared_data,
+            test_data=adapted_data,
             model_type=model_type,
             verbose=verbose
         )
