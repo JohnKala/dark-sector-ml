@@ -103,14 +103,13 @@ def run_comparative_training(
     if verbose:
         print("Loading and preparing dataset...")
     
-    # Load datasets
-    datasets = []
-    for file_path in dataset_files:
-        dataset = load_dataset(file_path)
-        datasets.append(dataset)
-    
-    # Create combined dataset
-    combined_dataset = create_dataset(datasets)
+    # Create combined dataset directly from file paths
+    combined_dataset = create_dataset(
+        file_list=dataset_files,
+        use_scaled=True,
+        signal_background_mode=True,
+        verbose=verbose
+    )
     
     # Prepare for ML
     prepared_data = prepare_ml_dataset(
