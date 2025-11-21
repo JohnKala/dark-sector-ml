@@ -114,11 +114,12 @@ def run_comparative_training(
     # Prepare for ML
     prepared_data = prepare_ml_dataset(
         combined_dataset,
-        model_type=model_type,
         test_size=0.2,
         val_size=0.2,
         normalize=True,
-        random_state=random_seed
+        reshape_3d=(model_type.lower() == 'deepsets'),  # Reshape for DeepSets models
+        random_state=random_seed,
+        verbose=verbose
     )
     
     # Save dataset splits for reproducibility
