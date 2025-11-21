@@ -98,9 +98,15 @@ def run_adversarial_comparison(
         print("\nEvaluating model robustness...")
     
     standard_model = training_results['standard']['model']
+    
+    # Use the adapted_data from training_results
+    standard_test_data = {
+        'test': training_results['standard']['training_results']['test']
+    }
+    
     standard_robustness = evaluate_model_robustness(
         model=standard_model,
-        test_data=training_results['standard']['training_results'],
+        test_data=standard_test_data,
         model_type=model_type,
         verbose=verbose
     )
@@ -108,9 +114,15 @@ def run_adversarial_comparison(
     adversarial_robustness = None
     if 'adversarial' in training_results:
         adversarial_model = training_results['adversarial']['model']
+        
+        # Use the adapted_data from training_results
+        adversarial_test_data = {
+            'test': training_results['adversarial']['training_results']['test']
+        }
+        
         adversarial_robustness = evaluate_model_robustness(
             model=adversarial_model,
-            test_data=training_results['adversarial']['training_results'],
+            test_data=adversarial_test_data,
             model_type=model_type,
             verbose=verbose
         )
