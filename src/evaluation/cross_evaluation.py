@@ -124,8 +124,7 @@ def run_comparative_training(
     )
     
     # Save metadata for reproducibility
-    with open(os.path.join(output_dir, 'dataset_metadata.json'), 'w') as f:
-        json.dump(prepared_data['metadata'], f, indent=2)
+    np.save(os.path.join(output_dir, 'dataset_metadata.npy'), prepared_data['metadata'])
     
     # Train standard model
     if verbose:
