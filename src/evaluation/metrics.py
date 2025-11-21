@@ -196,3 +196,119 @@ def evaluate_all_models(
                 eval_results[f"{model_name}_on_{ds_name}"] = ds_results
     
     return eval_results
+
+
+def calculate_robustness_score(
+    clean_results: Dict[str, float],
+    perturbed_results: Dict[str, float],
+    metric: str = 'roc_auc'
+) -> float:
+    """
+    Calculate robustness score as ratio of performance on perturbed vs. clean data.
+    
+    Parameters:
+    -----------
+    clean_results : Dict[str, float]
+        Results on clean data
+    perturbed_results : Dict[str, float]
+        Results on perturbed data
+    metric : str
+        Metric to use for robustness calculation
+        
+    Returns:
+    --------
+    float
+        Robustness score (0-1, higher is better)
+    """
+    if metric not in clean_results or metric not in perturbed_results:
+        raise ValueError(f"Metric '{metric}' not found in results")
+    
+    # Robustness score = perturbed_metric / clean_metric (higher is better)
+    # This measures how well the model maintains performance under perturbation
+    return perturbed_results[metric] / clean_results[metric]
+
+
+def calculate_generalization_gap(
+    in_distribution_results: Dict[str, float],
+    out_distribution_results: Dict[str, float],
+    metric: str = 'roc_auc'
+) -> float:
+    """
+    Calculate generalization gap between in-distribution and out-of-distribution performance.
+    
+    Parameters:
+    -----------
+    in_distribution_results : Dict[str, float]
+        Results on in-distribution data
+    out_distribution_results : Dict[str, float]
+        Results on out-of-distribution data
+    metric : str
+        Metric to use for gap calculation
+        
+    Returns:
+    --------
+    float
+        Generalization gap (lower is better)
+    """
+    if metric not in in_distribution_results or metric not in out_distribution_results:
+        raise ValueError(f"Metric '{metric}' not found in results")
+    
+    # Generalization gap = in_distribution_metric - out_distribution_metric
+    # Lower values indicate better generalization to unseen data
+    return in_distribution_results[metric] - out_distribution_results[metric]
+
+
+def calculate_physics_weighted_score(
+    results: Dict[str, float],
+    weights: Dict[str, float] = None,
+    metrics: List[str] = None
+) -> float:
+    """
+    Calculate a physics-weighted composite score from multiple metrics.
+    
+    Parameters:
+    -----------
+    results : Dict[str, float]
+        Dictionary of evaluation metrics
+    weights : Dict[str, float], optional
+        Dictionary of weights for each metric
+    metrics : List[str], optional
+        List of metrics to include in the score
+        
+    Returns:
+    --------
+    float
+        Composite score
+    """
+    # Default metrics if not provided
+    if metrics is None:
+        metrics = ['roc_auc', 'precision', 'recall', 'f1']
+    
+    # Default weights if not provided
+    if weights is None:
+        weights = {
+            'roc_auc': 0.4,
+            'precision': 0.2,
+            'recall': 0.2,
+            'f1': 0.2
+        }
+    
+    # Ensure all metrics are available
+    for metric in metrics:
+        if metric not in results:
+            raise ValueError(f"Metric '{metric}' not found in results")
+    
+    # Calculate weighted sum
+    score = 0.0
+    total_weight = 0.0
+    
+    for metric in metrics:
+        weight = weights.get(metric, 1.0)
+        score += weight * results[metric]
+        total_weight += weight
+    
+    # Normalize by total weight
+    if total_weight > 0:
+        score /= total_weight
+    
+    return score
