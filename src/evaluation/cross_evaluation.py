@@ -126,13 +126,30 @@ def run_comparative_training(
     # Save metadata for reproducibility
     np.save(os.path.join(output_dir, 'dataset_metadata.npy'), prepared_data['metadata'])
     
+    # Adapt prepared_data for train_model (which expects 'features' instead of 'X' or 'X_norm')
+    adapted_data = {}
+    for split in ['train', 'val', 'test']:
+        adapted_data[split] = {}
+        # Use X_norm if available, otherwise X
+        if 'X_norm' in prepared_data[split]:
+            adapted_data[split]['features'] = prepared_data[split]['X_norm']
+        else:
+            adapted_data[split]['features'] = prepared_data[split]['X']
+        # Copy other keys
+        adapted_data[split]['labels'] = prepared_data[split]['y']
+        if 'is_valid' in prepared_data[split]:
+            adapted_data[split]['attention_mask'] = prepared_data[split]['is_valid']
+    
+    # Copy metadata
+    adapted_data['metadata'] = prepared_data['metadata']
+    
     # Train standard model
     if verbose:
         print("\nTraining standard model...")
     
     standard_start_time = time.time()
     standard_results = train_model(
-        prepared_data=prepared_data,
+        prepared_data=adapted_data,
         model_type=model_type,
         hidden_units=[128, 64],
         dropout_rate=0.2,
@@ -153,7 +170,7 @@ def run_comparative_training(
         
         adversarial_start_time = time.time()
         adversarial_results = train_model(
-            prepared_data=prepared_data,
+            prepared_data=adapted_data,
             model_type=model_type,
             hidden_units=[128, 64],
             dropout_rate=0.2,
