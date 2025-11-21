@@ -82,7 +82,7 @@ def run_adversarial_comparison(
         print(f"Running comparative training with {len(dataset_files)} dataset files...")
         print(f"Adversarial config: {adversarial_config}")
     
-    training_results = run_comparative_training(
+    training_results, adapted_data = run_comparative_training(
         dataset_files=dataset_files,
         output_dir=output_dir,
         model_type=model_type,
@@ -99,10 +99,9 @@ def run_adversarial_comparison(
     
     standard_model = training_results['standard']['model']
     
-    # Use the adapted_data from training_results
-    standard_test_data = {
-        'test': training_results['standard']['training_results']['test']
-    }
+    # Use the adapted_data directly
+    # The adapted_data was used for training and evaluation
+    standard_test_data = adapted_data
     
     standard_robustness = evaluate_model_robustness(
         model=standard_model,
@@ -115,10 +114,8 @@ def run_adversarial_comparison(
     if 'adversarial' in training_results:
         adversarial_model = training_results['adversarial']['model']
         
-        # Use the adapted_data from training_results
-        adversarial_test_data = {
-            'test': training_results['adversarial']['training_results']['test']
-        }
+        # Use the same adapted_data for adversarial model
+        adversarial_test_data = adapted_data
         
         adversarial_robustness = evaluate_model_robustness(
             model=adversarial_model,

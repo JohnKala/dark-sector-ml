@@ -274,7 +274,8 @@ def run_comparative_training(
             print(f"Adversarial training time: {adversarial_training_time:.2f} seconds")
         print(f"Results saved to {output_dir}")
     
-    return results
+    # Return both results and adapted_data
+    return results, adapted_data
 
 
 def generate_perturbed_test_data(
