@@ -8,6 +8,7 @@ and performance evaluation across different parameter points.
 
 import os
 import time
+import json
 import numpy as np
 from typing import Dict, Any, List, Tuple, Optional
 from pathlib import Path
@@ -122,10 +123,9 @@ def run_comparative_training(
         verbose=verbose
     )
     
-    # Save dataset splits for reproducibility
-    np.save(os.path.join(output_dir, 'train_indices.npy'), prepared_data['train_indices'])
-    np.save(os.path.join(output_dir, 'val_indices.npy'), prepared_data['val_indices'])
-    np.save(os.path.join(output_dir, 'test_indices.npy'), prepared_data['test_indices'])
+    # Save metadata for reproducibility
+    with open(os.path.join(output_dir, 'dataset_metadata.json'), 'w') as f:
+        json.dump(prepared_data['metadata'], f, indent=2)
     
     # Train standard model
     if verbose:
