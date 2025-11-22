@@ -1,0 +1,30 @@
+[
+    {
+        "target_dataset": "AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-low.h5",
+        "is_source": false,
+        "std_auc": 0.2933481589856133,
+        "adv_auc": 0.2807311387466471,
+        "auc_diff": -0.012617020238966159,
+        "efficiency_ratio": 0.9999999772166672,
+        "std_sig_eff": 0.0043891733723482075,
+        "adv_sig_eff": 0.0043891733723482075,
+        "std_stability_kl": 0.0867197361597597,
+        "adv_stability_kl": 0.10510988061864437,
+        "std_stability_js": 0.01761336119794953,
+        "adv_stability_js": 0.02308332972175479
+    },
+    {
+        "target_dataset": "AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-peak.h5",
+        "is_source": false,
+        "std_auc": 0.5997072129748187,
+        "adv_auc": 0.5916390951771233,
+        "auc_diff": -0.00806811779769534,
+        "efficiency_ratio": 1.296296288796982,
+        "std_sig_eff": 0.017285531370038413,
+        "adv_sig_eff": 0.02240717029449424,
+        "std_stability_kl": 0.04609772885717481,
+        "adv_stability_kl": 0.03763212545448604,
+        "std_stability_js": 0.006544689345269326,
+        "adv_stability_js": 0.008152389772155585
+    }
+]
