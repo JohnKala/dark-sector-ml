@@ -196,3 +196,112 @@ def evaluate_all_models(
                 eval_results[f"{model_name}_on_{ds_name}"] = ds_results
     
     return eval_results
+
+
+def calculate_efficiency_ratio(
+    y_true: np.ndarray,
+    y_pred_proba_a: np.ndarray,
+    y_pred_proba_b: np.ndarray,
+    target_bg_eff: float = 0.01
+) -> Dict[str, float]:
+    """
+    Calculate the ratio of signal efficiencies between two models at a fixed background efficiency.
+    
+    Ratio > 1.0 means Model A is better than Model B.
+    
+    Parameters:
+    -----------
+    y_true : np.ndarray
+        Ground truth labels (0 for background, 1 for signal)
+    y_pred_proba_a : np.ndarray
+        Predicted probabilities from Model A (Numerator)
+    y_pred_proba_b : np.ndarray
+        Predicted probabilities from Model B (Denominator)
+    target_bg_eff : float
+        Target background efficiency (mistake rate), e.g., 0.01 for 1%
+        
+    Returns:
+    --------
+    dict
+        Dictionary containing efficiencies and the ratio
+    """
+    # Separate signal and background predictions
+    bg_mask = (y_true == 0)
+    sig_mask = (y_true == 1)
+    
+    # Model A
+    bg_preds_a = y_pred_proba_a[bg_mask]
+    sig_preds_a = y_pred_proba_a[sig_mask]
+    # Find threshold for Model A that gives target_bg_eff
+    # We want P(pred > thresh | bg) = target_bg_eff
+    # So we want the (1 - target_bg_eff) quantile
+    thresh_a = np.quantile(bg_preds_a, 1.0 - target_bg_eff)
+    # Calculate signal efficiency at this threshold
+    sig_eff_a = np.mean(sig_preds_a > thresh_a)
+    
+    # Model B
+    bg_preds_b = y_pred_proba_b[bg_mask]
+    sig_preds_b = y_pred_proba_b[sig_mask]
+    thresh_b = np.quantile(bg_preds_b, 1.0 - target_bg_eff)
+    sig_eff_b = np.mean(sig_preds_b > thresh_b)
+    
+    # Calculate ratio (avoid division by zero)
+    ratio = sig_eff_a / (sig_eff_b + 1e-10)
+    
+    return {
+        'sig_eff_a': float(sig_eff_a),
+        'sig_eff_b': float(sig_eff_b),
+        'ratio': float(ratio),
+        'target_bg_eff': target_bg_eff
+    }
+
+
+def calculate_divergence_metrics(
+    y_pred_proba_a: np.ndarray,
+    y_pred_proba_b: np.ndarray,
+    bins: int = 50
+) -> Dict[str, float]:
+    """
+    Calculate KL and JS divergence between two prediction distributions.
+    
+    Parameters:
+    -----------
+    y_pred_proba_a : np.ndarray
+        Predicted probabilities from Model A
+    y_pred_proba_b : np.ndarray
+        Predicted probabilities from Model B
+    bins : int
+        Number of bins for histogram discretization
+        
+    Returns:
+    --------
+    dict
+        Dictionary containing KL and JS divergence
+    """
+    # Discretize predictions into histograms to form probability distributions
+    hist_a, _ = np.histogram(y_pred_proba_a, bins=bins, range=(0, 1), density=True)
+    hist_b, _ = np.histogram(y_pred_proba_b, bins=bins, range=(0, 1), density=True)
+    
+    # Normalize to sum to 1 (probability mass function)
+    # Add small epsilon to avoid log(0)
+    epsilon = 1e-10
+    p = hist_a / (np.sum(hist_a) + epsilon)
+    q = hist_b / (np.sum(hist_b) + epsilon)
+    
+    # Ensure no zeros
+    p = p + epsilon
+    q = q + epsilon
+    p = p / np.sum(p)
+    q = q / np.sum(q)
+    
+    # KL Divergence D_KL(P || Q)
+    kl_div = np.sum(p * np.log(p / q))
+    
+    # Jensen-Shannon Divergence
+    m = 0.5 * (p + q)
+    js_div = 0.5 * np.sum(p * np.log(p / m)) + 0.5 * np.sum(q * np.log(q / m))
+    
+    return {
+        'kl_divergence': float(kl_div),
+        'js_divergence': float(js_div)
+    }
