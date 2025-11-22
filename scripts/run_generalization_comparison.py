@@ -260,6 +260,8 @@ def main():
         print(f"  > Eff Ratio (1%): {eff_metrics['ratio']:.4f} ({'WIN' if eff_metrics['ratio'] > 1 else 'LOSS'})")
         print(f"  > Std Stability (KL): {std_stability['kl_divergence']:.4f}")
         print(f"  > Adv Stability (KL): {adv_stability['kl_divergence']:.4f} ({'WIN' if adv_stability['kl_divergence'] < std_stability['kl_divergence'] else 'LOSS'})")
+        print(f"  > Std Stability (JS): {std_stability['js_divergence']:.4f}")
+        print(f"  > Adv Stability (JS): {adv_stability['js_divergence']:.4f} ({'WIN' if adv_stability['js_divergence'] < std_stability['js_divergence'] else 'LOSS'})")
         
         # Store Result
         comparison_results.append({
