@@ -36,9 +36,9 @@ def plot_feature_shift(
         clean_flat = clean_features
         pert_flat = perturbed_features
         
-    # Remove padding (assuming 0 padding for masked particles)
-    # A simple heuristic: if pT (index 0) is exactly 0, it's likely padding
-    mask = clean_flat[:, 0] != 0
+    # Remove padding (assuming <= -900 padding for masked particles)
+    # A simple heuristic: if pT (index 0) is <= -900, it's padding
+    mask = clean_flat[:, 0] > -900
     clean_flat = clean_flat[mask]
     pert_flat = pert_flat[mask]
     
@@ -132,8 +132,8 @@ def plot_delta_heatmap(
         clean_flat = clean_features
         pert_flat = perturbed_features
         
-    # Filter padding
-    mask = clean_flat[:, 0] != 0
+    # Filter padding (<= -900)
+    mask = clean_flat[:, 0] > -900
     clean_flat = clean_flat[mask]
     pert_flat = pert_flat[mask]
     

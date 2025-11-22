@@ -241,13 +241,25 @@ def main():
             y_true, adv_probs, std_probs, target_bg_eff=0.01
         )
         
-        # 2. Divergence (How different are the predictions?)
-        div_metrics = calculate_divergence_metrics(std_probs, adv_probs)
+        # 2. Stability Metrics (KL Divergence from Source Distribution)
+        # We want to know: How much did the model's predictions change when moving from Source -> Target?
+        # Lower is better (more stable).
+        
+        # Get Source Predictions (calculated earlier)
+        # Note: We need to store source predictions during the first pass or re-calculate
+        # For simplicity, let's re-calculate on source data (it's fast)
+        std_source_probs = std_model.predict([source_data['test']['features'], source_data['test']['attention_mask']], verbose=0).ravel()
+        adv_source_probs = adv_model.predict([source_data['test']['features'], source_data['test']['attention_mask']], verbose=0).ravel()
+        
+        # Calculate Stability (Source vs Target)
+        std_stability = calculate_divergence_metrics(std_source_probs, std_probs)
+        adv_stability = calculate_divergence_metrics(adv_source_probs, adv_probs)
         
         print(f"  > Std AUC: {std_auc:.4f}")
         print(f"  > Adv AUC: {adv_auc:.4f}")
         print(f"  > Eff Ratio (1%): {eff_metrics['ratio']:.4f} ({'WIN' if eff_metrics['ratio'] > 1 else 'LOSS'})")
-        print(f"  > KL Divergence: {div_metrics['kl_divergence']:.4f}")
+        print(f"  > Std Stability (KL): {std_stability['kl_divergence']:.4f}")
+        print(f"  > Adv Stability (KL): {adv_stability['kl_divergence']:.4f} ({'WIN' if adv_stability['kl_divergence'] < std_stability['kl_divergence'] else 'LOSS'})")
         
         # Store Result
         comparison_results.append({
@@ -257,10 +269,12 @@ def main():
             'adv_auc': float(adv_auc),
             'auc_diff': float(adv_auc - std_auc),
             'efficiency_ratio': eff_metrics['ratio'],
-            'std_sig_eff': eff_metrics['sig_eff_b'], # Denominator was std
-            'adv_sig_eff': eff_metrics['sig_eff_a'], # Numerator was adv
-            'kl_divergence': div_metrics['kl_divergence'],
-            'js_divergence': div_metrics['js_divergence']
+            'std_sig_eff': eff_metrics['sig_eff_b'],
+            'adv_sig_eff': eff_metrics['sig_eff_a'],
+            'std_stability_kl': std_stability['kl_divergence'],
+            'adv_stability_kl': adv_stability['kl_divergence'],
+            'std_stability_js': std_stability['js_divergence'],
+            'adv_stability_js': adv_stability['js_divergence']
         })
         
     # ---------------------------------------------------------
