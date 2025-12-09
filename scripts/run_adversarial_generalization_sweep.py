@@ -334,18 +334,27 @@ def run_single_config(args_tuple: Tuple) -> List[Dict]:
     
     # Set GPU visibility for this process
     os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TF logging noise
     
     # Import TensorFlow AFTER setting CUDA_VISIBLE_DEVICES
     import tensorflow as tf
     
-    # Limit GPU memory growth
+    # Limit GPU memory growth and set memory limit
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
         try:
             for gpu in gpus:
                 tf.config.experimental.set_memory_growth(gpu, True)
+                # Optionally limit memory to avoid conflicts
+                # tf.config.set_logical_device_configuration(
+                #     gpu, [tf.config.LogicalDeviceConfiguration(memory_limit=8000)]
+                # )
         except RuntimeError as e:
-            print(f"GPU config error: {e}")
+            print(f"[GPU {gpu_id}] GPU config error: {e}")
+    
+    # Clear any existing sessions
+    tf.keras.backend.clear_session()
     
     # Re-import modules that use TensorFlow
     from src.training.trainer import train_model
