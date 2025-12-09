@@ -155,10 +155,10 @@ Examples:
     # Robustness evaluation
     parser.add_argument('--eval_robustness', action='store_true',
                         help='Also evaluate robustness on each target (slower)')
-    parser.add_argument('--robustness_eps', type=float, default=1e-6,
-                        help='Perturbation budget for robustness eval')
-    parser.add_argument('--robustness_iter', type=int, default=10,
-                        help='Attack steps for robustness eval')
+    parser.add_argument('--robustness_eps', type=float, default=0.1,
+                        help='Perturbation budget for robustness eval (default: 0.1)')
+    parser.add_argument('--robustness_iter', type=int, default=20,
+                        help='Attack steps for robustness eval (default: 20)')
     
     # Misc
     parser.add_argument('--save_models', action='store_true',
@@ -392,11 +392,16 @@ def run_single_config(args_tuple: Tuple) -> List[Dict]:
     
     # Save training history
     history_path = os.path.join(config_dir, 'training_history.json')
+    history = train_results.get('history', {})
+    # Adversarial training uses 'total_loss', standard uses 'loss'
+    loss_key = 'total_loss' if 'total_loss' in history else 'loss'
+    val_key = 'val_loss' if 'val_loss' in history else 'val_auc'
     history_data = {
         'config': adv_config,
-        'epochs_run': len(train_results.get('history', {}).get('loss', [])),
+        'epochs_run': len(history.get(loss_key, [])),
         'training_time': training_time,
-        'final_val_auc': train_results.get('history', {}).get('val_auc', [None])[-1]
+        'final_val_metric': history.get(val_key, [None])[-1] if history.get(val_key) else None,
+        'best_val_loss': train_results.get('best_val_loss', None)
     }
     save_json(history_data, history_path)
     
@@ -797,11 +802,16 @@ def main():
             
             # Save training history
             history_path = os.path.join(config_dir, 'training_history.json')
+            history = train_results.get('history', {})
+            # Adversarial training uses 'total_loss', standard uses 'loss'
+            loss_key = 'total_loss' if 'total_loss' in history else 'loss'
+            val_key = 'val_loss' if 'val_loss' in history else 'val_auc'
             history_data = {
                 'config': adv_config,
-                'epochs_run': len(train_results.get('history', {}).get('loss', [])),
+                'epochs_run': len(history.get(loss_key, [])),
                 'training_time': training_time,
-                'final_val_auc': train_results.get('history', {}).get('val_auc', [None])[-1]
+                'final_val_metric': history.get(val_key, [None])[-1] if history.get(val_key) else None,
+                'best_val_loss': train_results.get('best_val_loss', None)
             }
             save_json(history_data, history_path)
             
