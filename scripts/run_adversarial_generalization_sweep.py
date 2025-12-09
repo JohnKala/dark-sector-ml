@@ -15,10 +15,10 @@ Workflow:
 6. Aggregate results and generate visualizations
 
 Usage:
-    # Full sweep (local)
+    # Full sweep with parallel GPU execution (recommended)
     python scripts/run_adversarial_generalization_sweep.py \
         --source_signal data/raw/AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5 \
-        --output_dir results/adv_gen_sweep \
+        --num_parallel 6 \
         --eval_robustness
 
     # Quick test
@@ -26,10 +26,10 @@ Usage:
         --source_signal data/raw/AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5 \
         --quick_run
 
-    # HPC job array (single config)
+    # Single config (for debugging or manual parallelization)
     python scripts/run_adversarial_generalization_sweep.py \
         --source_signal data/raw/AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5 \
-        --single_config_idx $SLURM_ARRAY_TASK_ID
+        --single_config_idx 0
 """
 
 import os
@@ -38,14 +38,13 @@ import argparse
 import json
 import csv
 import time
+import multiprocessing as mp
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
 
 # Add project root to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
-import tensorflow as tf
 
 from src.data.preparation import create_dataset
 from src.data.preprocessor import prepare_ml_dataset, prepare_deepsets_data
@@ -109,9 +108,10 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Full sweep with robustness evaluation
+  # Full sweep with 6 parallel GPUs
   python scripts/run_adversarial_generalization_sweep.py \\
       --source_signal data/raw/AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5 \\
+      --num_parallel 6 \\
       --eval_robustness
 
   # Quick test run
@@ -119,10 +119,10 @@ Examples:
       --source_signal data/raw/AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5 \\
       --quick_run
 
-  # HPC job array mode (run single config)
+  # Single config mode (for debugging)
   python scripts/run_adversarial_generalization_sweep.py \\
       --source_signal data/raw/... \\
-      --single_config_idx $SLURM_ARRAY_TASK_ID
+      --single_config_idx 0
         """
     )
     
@@ -148,7 +148,9 @@ Examples:
     parser.add_argument('--config_file', type=str, default=None,
                         help='JSON file with custom sweep configs (optional)')
     parser.add_argument('--single_config_idx', type=int, default=None,
-                        help='Run only config at this index (for HPC job arrays)')
+                        help='Run only config at this index (for debugging)')
+    parser.add_argument('--num_parallel', type=int, default=1,
+                        help='Number of configs to run in parallel (set to number of GPUs)')
     
     # Robustness evaluation
     parser.add_argument('--eval_robustness', action='store_true',
@@ -225,7 +227,7 @@ def discover_signal_files(source_path: str) -> List[str]:
     return sorted(files)
 
 
-def get_predictions(model: tf.keras.Model, data: Dict[str, Any]) -> np.ndarray:
+def get_predictions(model, data: Dict[str, Any]) -> np.ndarray:
     """Get model predictions on test data."""
     features = data['test']['features']
     masks = data['test']['attention_mask']
@@ -308,6 +310,167 @@ def aggregate_results(all_results: List[Dict]) -> Dict[str, Any]:
         'num_targets': len(all_results) // len(configs) if configs else 0,
         'config_rankings': summary
     }
+
+
+# =============================================================================
+# PARALLEL WORKER FUNCTION
+# =============================================================================
+
+def run_single_config(args_tuple: Tuple) -> List[Dict]:
+    """
+    Worker function to train and evaluate a single adversarial config.
+    This runs in a separate process with its own GPU.
+    
+    Parameters:
+    -----------
+    args_tuple : tuple
+        (config_idx, adv_config, gpu_id, shared_args)
+        
+    Returns:
+    --------
+    List[Dict] : Results for all targets for this config
+    """
+    config_idx, adv_config, gpu_id, shared_args = args_tuple
+    
+    # Set GPU visibility for this process
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    
+    # Import TensorFlow AFTER setting CUDA_VISIBLE_DEVICES
+    import tensorflow as tf
+    
+    # Limit GPU memory growth
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(f"GPU config error: {e}")
+    
+    # Re-import modules that use TensorFlow
+    from src.training.trainer import train_model
+    from src.evaluation.metrics import evaluate_model, calculate_efficiency_ratio, calculate_divergence_metrics
+    from src.evaluation.robustness import RobustnessEvaluator
+    
+    config_name = make_config_name(adv_config)
+    config_dir = os.path.join(shared_args['output_base'], config_name)
+    os.makedirs(config_dir, exist_ok=True)
+    
+    print(f"\n[GPU {gpu_id}] CONFIG {config_idx + 1}: {config_name}")
+    
+    if adv_config:
+        print(f"[GPU {gpu_id}]   alpha={adv_config['alpha']}, eps={adv_config['grad_eps']}, "
+              f"iter={adv_config['grad_iter']}, eta={adv_config['grad_eta']}")
+    else:
+        print(f"[GPU {gpu_id}]   Standard training (no adversarial)")
+    
+    # Load data (each process loads its own copy)
+    source_data = load_and_prepare(shared_args['source_signal'], shared_args['background_path'])
+    
+    # Train model
+    train_start = time.time()
+    try:
+        train_results = train_model(
+            prepared_data=source_data,
+            model_type='deepsets',
+            epochs=shared_args['epochs'],
+            batch_size=shared_args['batch_size'],
+            patience=shared_args['patience'],
+            adversarial_config=adv_config,
+            verbose=False,
+            save_model=shared_args['save_models'],
+            output_dir=config_dir if shared_args['save_models'] else "."
+        )
+        model = train_results['model']
+        training_time = time.time() - train_start
+        print(f"[GPU {gpu_id}]   Training completed in {training_time:.1f}s")
+    except Exception as e:
+        print(f"[GPU {gpu_id}]   ERROR during training: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+    
+    # Save training history
+    history_path = os.path.join(config_dir, 'training_history.json')
+    history_data = {
+        'config': adv_config,
+        'epochs_run': len(train_results.get('history', {}).get('loss', [])),
+        'training_time': training_time,
+        'final_val_auc': train_results.get('history', {}).get('val_auc', [None])[-1]
+    }
+    save_json(history_data, history_path)
+    
+    # Get source predictions
+    source_preds = get_predictions(model, source_data)
+    
+    # Setup robustness evaluator if needed
+    robustness_evaluator = None
+    if shared_args['eval_robustness']:
+        robustness_evaluator = RobustnessEvaluator(
+            attack_config={
+                'grad_eps': shared_args['robustness_eps'],
+                'grad_iter': shared_args['robustness_iter'],
+                'grad_eta': shared_args['robustness_eps'] / 5
+            },
+            batch_size=shared_args['batch_size']
+        )
+    
+    # Cross-evaluate on all targets
+    config_results = []
+    data_dir = os.path.dirname(shared_args['source_signal'])
+    
+    for target_file in shared_args['target_files']:
+        target_path = os.path.join(data_dir, target_file)
+        is_source = (target_file == os.path.basename(shared_args['source_signal']))
+        
+        # Load target data
+        target_data = load_and_prepare(target_path, shared_args['background_path'])
+        
+        # Generalization metrics
+        eval_results = evaluate_model(model, target_data, verbose=False)
+        target_preds = eval_results['predictions']['y_pred_proba']
+        y_true = eval_results['predictions']['y_true']
+        
+        # Efficiency at 1% background
+        eff_metrics = calculate_efficiency_ratio(
+            y_true, target_preds, target_preds, target_bg_eff=0.01
+        )
+        
+        # Stability metrics
+        stability = calculate_divergence_metrics(source_preds, target_preds)
+        
+        # Robustness metrics (optional)
+        robust_metrics = {}
+        if robustness_evaluator is not None:
+            robust_metrics = robustness_evaluator.evaluate(model, target_data)
+        
+        # Collect result
+        result = {
+            'config_name': config_name,
+            'config': adv_config,
+            'target_dataset': target_file,
+            'is_source': is_source,
+            'gen_auc': float(eval_results['metrics']['roc_auc']),
+            'gen_pr_auc': float(eval_results['metrics']['pr_auc']),
+            'sig_eff_at_1pct': float(eff_metrics['sig_eff_a']),
+            'stability_kl': float(stability['kl_divergence']),
+            'stability_js': float(stability['js_divergence']),
+        }
+        
+        if robust_metrics:
+            result['clean_auc'] = float(robust_metrics['clean_auc'])
+            result['robust_auc'] = float(robust_metrics['robust_auc'])
+            result['robustness_score'] = float(robust_metrics['robustness_score'])
+        
+        config_results.append(result)
+        
+        print(f"[GPU {gpu_id}]   {target_file}: AUC={result['gen_auc']:.4f}")
+    
+    # Save per-config results
+    save_json(config_results, os.path.join(config_dir, 'cross_eval_results.json'))
+    
+    print(f"[GPU {gpu_id}] CONFIG {config_name} COMPLETE")
+    return config_results
 
 
 # =============================================================================
@@ -488,13 +651,18 @@ def main():
         args.epochs = 1
         configs = configs[:3]  # Baseline + 2 adversarial
     
-    # HPC job array mode
+    # Single config mode (for debugging)
     if args.single_config_idx is not None:
         if args.single_config_idx >= len(configs):
             print(f"Error: config index {args.single_config_idx} >= {len(configs)} configs")
             sys.exit(1)
         configs = [configs[args.single_config_idx]]
-        print(f"HPC MODE: Running single config at index {args.single_config_idx}")
+        print(f"SINGLE CONFIG MODE: Running config at index {args.single_config_idx}")
+    
+    # Discover all target datasets
+    target_files = discover_signal_files(args.source_signal)
+    if args.quick_run:
+        target_files = target_files[:2]
     
     # Print header
     print("=" * 70)
@@ -504,156 +672,203 @@ def main():
     print(f"Output Directory: {output_base}")
     print(f"Number of Configs: {len(configs)}")
     print(f"Epochs per Config: {args.epochs}")
+    print(f"Parallel Workers: {args.num_parallel}")
     print(f"Evaluate Robustness: {args.eval_robustness}")
+    print(f"Target Datasets: {len(target_files)}")
     print("=" * 70)
     
-    # Prepare source data (once)
-    print("\n[SETUP] Loading source data...")
-    source_data = load_and_prepare(args.source_signal, args.background_path)
-    print(f"  Train: {len(source_data['train']['labels'])} samples")
-    print(f"  Val: {len(source_data['val']['labels'])} samples")
-    print(f"  Test: {len(source_data['test']['labels'])} samples")
-    
-    # Discover all target datasets
-    data_dir = os.path.dirname(args.source_signal)
-    target_files = discover_signal_files(args.source_signal)
-    
-    if args.quick_run:
-        target_files = target_files[:2]
-    
-    print(f"\n[SETUP] Found {len(target_files)} target datasets:")
-    for tf in target_files:
-        marker = " (SOURCE)" if tf == os.path.basename(args.source_signal) else ""
-        print(f"  - {tf}{marker}")
-    
-    # Setup robustness evaluator if needed
-    robustness_evaluator = None
-    if args.eval_robustness:
-        robustness_evaluator = RobustnessEvaluator(
-            attack_config={
-                'grad_eps': args.robustness_eps,
-                'grad_iter': args.robustness_iter,
-                'grad_eta': args.robustness_eps / 5
-            },
-            batch_size=args.batch_size
-        )
-    
-    # Main sweep loop
-    all_results = []
     sweep_start_time = time.time()
+    all_results = []
     
-    for config_idx, adv_config in enumerate(configs):
-        config_name = make_config_name(adv_config)
-        config_dir = os.path.join(output_base, config_name)
-        os.makedirs(config_dir, exist_ok=True)
+    # =================================================================
+    # PARALLEL EXECUTION MODE
+    # =================================================================
+    if args.num_parallel > 1:
+        print(f"\n[PARALLEL MODE] Using {args.num_parallel} GPUs")
         
-        print(f"\n{'=' * 70}")
-        print(f"CONFIG {config_idx + 1}/{len(configs)}: {config_name}")
-        print(f"{'=' * 70}")
-        
-        if adv_config:
-            print(f"  alpha={adv_config['alpha']}, eps={adv_config['grad_eps']}, "
-                  f"iter={adv_config['grad_iter']}, eta={adv_config['grad_eta']}")
-        else:
-            print("  Standard training (no adversarial)")
-        
-        # Train model with this config
-        train_start = time.time()
-        try:
-            train_results = train_model(
-                prepared_data=source_data,
-                model_type='deepsets',
-                epochs=args.epochs,
-                batch_size=args.batch_size,
-                patience=args.patience,
-                adversarial_config=adv_config,
-                verbose=args.verbose,
-                save_model=args.save_models,
-                output_dir=config_dir if args.save_models else "."
-            )
-            model = train_results['model']
-            training_time = time.time() - train_start
-            print(f"  Training completed in {training_time:.1f}s")
-        except Exception as e:
-            print(f"  ERROR during training: {e}")
-            import traceback
-            traceback.print_exc()
-            continue
-        
-        # Save training history
-        history_path = os.path.join(config_dir, 'training_history.json')
-        history_data = {
-            'config': adv_config,
-            'epochs_run': len(train_results.get('history', {}).get('loss', [])),
-            'training_time': training_time,
-            'final_val_auc': train_results.get('history', {}).get('val_auc', [None])[-1]
+        # Prepare shared arguments for workers
+        shared_args = {
+            'source_signal': args.source_signal,
+            'background_path': args.background_path,
+            'output_base': output_base,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'patience': args.patience,
+            'save_models': args.save_models,
+            'eval_robustness': args.eval_robustness,
+            'robustness_eps': args.robustness_eps,
+            'robustness_iter': args.robustness_iter,
+            'target_files': target_files,
         }
-        save_json(history_data, history_path)
         
-        # Get source predictions (for stability metrics)
-        source_preds = get_predictions(model, source_data)
+        # Create work items: (config_idx, adv_config, gpu_id, shared_args)
+        work_items = []
+        for config_idx, adv_config in enumerate(configs):
+            gpu_id = config_idx % args.num_parallel
+            work_items.append((config_idx, adv_config, gpu_id, shared_args))
         
-        # Cross-evaluate on all targets
-        config_results = []
+        # Run in parallel using multiprocessing Pool
+        print(f"[PARALLEL] Launching {len(work_items)} configs across {args.num_parallel} GPUs...")
         
-        for target_file in target_files:
-            target_path = os.path.join(data_dir, target_file)
-            is_source = (target_file == os.path.basename(args.source_signal))
-            
-            print(f"\n  Evaluating on: {target_file}" + (" (SOURCE)" if is_source else ""))
-            
-            # Load target data
-            target_data = load_and_prepare(target_path, args.background_path)
-            
-            # Generalization metrics
-            eval_results = evaluate_model(model, target_data, verbose=False)
-            target_preds = eval_results['predictions']['y_pred_proba']
-            y_true = eval_results['predictions']['y_true']
-            
-            # Efficiency at 1% background
-            eff_metrics = calculate_efficiency_ratio(
-                y_true, target_preds, target_preds, target_bg_eff=0.01
+        # Use 'spawn' to ensure clean GPU state per process
+        ctx = mp.get_context('spawn')
+        with ctx.Pool(processes=args.num_parallel) as pool:
+            results_list = pool.map(run_single_config, work_items)
+        
+        # Flatten results
+        for config_results in results_list:
+            all_results.extend(config_results)
+        
+        print(f"\n[PARALLEL] All {len(configs)} configs completed!")
+    
+    # =================================================================
+    # SEQUENTIAL EXECUTION MODE
+    # =================================================================
+    else:
+        print("\n[SEQUENTIAL MODE] Running configs one at a time")
+        
+        # Import TensorFlow for sequential mode
+        import tensorflow as tf
+        
+        # Prepare source data (once)
+        print("\n[SETUP] Loading source data...")
+        source_data = load_and_prepare(args.source_signal, args.background_path)
+        print(f"  Train: {len(source_data['train']['labels'])} samples")
+        print(f"  Val: {len(source_data['val']['labels'])} samples")
+        print(f"  Test: {len(source_data['test']['labels'])} samples")
+        
+        print(f"\n[SETUP] Found {len(target_files)} target datasets:")
+        for tf_name in target_files:
+            marker = " (SOURCE)" if tf_name == os.path.basename(args.source_signal) else ""
+            print(f"  - {tf_name}{marker}")
+        
+        # Setup robustness evaluator if needed
+        robustness_evaluator = None
+        if args.eval_robustness:
+            robustness_evaluator = RobustnessEvaluator(
+                attack_config={
+                    'grad_eps': args.robustness_eps,
+                    'grad_iter': args.robustness_iter,
+                    'grad_eta': args.robustness_eps / 5
+                },
+                batch_size=args.batch_size
             )
-            
-            # Stability metrics (source → target)
-            stability = calculate_divergence_metrics(source_preds, target_preds)
-            
-            # Robustness metrics (optional)
-            robust_metrics = {}
-            if robustness_evaluator is not None:
-                print(f"    Running robustness evaluation...")
-                robust_metrics = robustness_evaluator.evaluate(model, target_data)
-            
-            # Collect result
-            result = {
-                'config_name': config_name,
-                'config': adv_config,
-                'target_dataset': target_file,
-                'is_source': is_source,
-                'gen_auc': float(eval_results['metrics']['roc_auc']),
-                'gen_pr_auc': float(eval_results['metrics']['pr_auc']),
-                'sig_eff_at_1pct': float(eff_metrics['sig_eff_a']),
-                'stability_kl': float(stability['kl_divergence']),
-                'stability_js': float(stability['js_divergence']),
-            }
-            
-            # Add robustness metrics if available
-            if robust_metrics:
-                result['clean_auc'] = float(robust_metrics['clean_auc'])
-                result['robust_auc'] = float(robust_metrics['robust_auc'])
-                result['robustness_score'] = float(robust_metrics['robustness_score'])
-            
-            config_results.append(result)
-            
-            # Print summary
-            print(f"    AUC: {result['gen_auc']:.4f}, SigEff@1%: {result['sig_eff_at_1pct']:.4f}", end="")
-            if robust_metrics:
-                print(f", RobustScore: {result['robustness_score']:.4f}", end="")
-            print()
         
-        # Save per-config results
-        save_json(config_results, os.path.join(config_dir, 'cross_eval_results.json'))
-        all_results.extend(config_results)
+        data_dir = os.path.dirname(args.source_signal)
+        
+        # Main sweep loop (sequential)
+        for config_idx, adv_config in enumerate(configs):
+            config_name = make_config_name(adv_config)
+            config_dir = os.path.join(output_base, config_name)
+            os.makedirs(config_dir, exist_ok=True)
+            
+            print(f"\n{'=' * 70}")
+            print(f"CONFIG {config_idx + 1}/{len(configs)}: {config_name}")
+            print(f"{'=' * 70}")
+            
+            if adv_config:
+                print(f"  alpha={adv_config['alpha']}, eps={adv_config['grad_eps']}, "
+                      f"iter={adv_config['grad_iter']}, eta={adv_config['grad_eta']}")
+            else:
+                print("  Standard training (no adversarial)")
+            
+            # Train model with this config
+            train_start = time.time()
+            try:
+                train_results = train_model(
+                    prepared_data=source_data,
+                    model_type='deepsets',
+                    epochs=args.epochs,
+                    batch_size=args.batch_size,
+                    patience=args.patience,
+                    adversarial_config=adv_config,
+                    verbose=args.verbose,
+                    save_model=args.save_models,
+                    output_dir=config_dir if args.save_models else "."
+                )
+                model = train_results['model']
+                training_time = time.time() - train_start
+                print(f"  Training completed in {training_time:.1f}s")
+            except Exception as e:
+                print(f"  ERROR during training: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+            
+            # Save training history
+            history_path = os.path.join(config_dir, 'training_history.json')
+            history_data = {
+                'config': adv_config,
+                'epochs_run': len(train_results.get('history', {}).get('loss', [])),
+                'training_time': training_time,
+                'final_val_auc': train_results.get('history', {}).get('val_auc', [None])[-1]
+            }
+            save_json(history_data, history_path)
+            
+            # Get source predictions (for stability metrics)
+            source_preds = get_predictions(model, source_data)
+            
+            # Cross-evaluate on all targets
+            config_results = []
+            
+            for target_file in target_files:
+                target_path = os.path.join(data_dir, target_file)
+                is_source = (target_file == os.path.basename(args.source_signal))
+                
+                print(f"\n  Evaluating on: {target_file}" + (" (SOURCE)" if is_source else ""))
+                
+                # Load target data
+                target_data = load_and_prepare(target_path, args.background_path)
+                
+                # Generalization metrics
+                eval_results = evaluate_model(model, target_data, verbose=False)
+                target_preds = eval_results['predictions']['y_pred_proba']
+                y_true = eval_results['predictions']['y_true']
+                
+                # Efficiency at 1% background
+                eff_metrics = calculate_efficiency_ratio(
+                    y_true, target_preds, target_preds, target_bg_eff=0.01
+                )
+                
+                # Stability metrics (source → target)
+                stability = calculate_divergence_metrics(source_preds, target_preds)
+                
+                # Robustness metrics (optional)
+                robust_metrics = {}
+                if robustness_evaluator is not None:
+                    print(f"    Running robustness evaluation...")
+                    robust_metrics = robustness_evaluator.evaluate(model, target_data)
+                
+                # Collect result
+                result = {
+                    'config_name': config_name,
+                    'config': adv_config,
+                    'target_dataset': target_file,
+                    'is_source': is_source,
+                    'gen_auc': float(eval_results['metrics']['roc_auc']),
+                    'gen_pr_auc': float(eval_results['metrics']['pr_auc']),
+                    'sig_eff_at_1pct': float(eff_metrics['sig_eff_a']),
+                    'stability_kl': float(stability['kl_divergence']),
+                    'stability_js': float(stability['js_divergence']),
+                }
+                
+                # Add robustness metrics if available
+                if robust_metrics:
+                    result['clean_auc'] = float(robust_metrics['clean_auc'])
+                    result['robust_auc'] = float(robust_metrics['robust_auc'])
+                    result['robustness_score'] = float(robust_metrics['robustness_score'])
+                
+                config_results.append(result)
+                
+                # Print summary
+                print(f"    AUC: {result['gen_auc']:.4f}, SigEff@1%: {result['sig_eff_at_1pct']:.4f}", end="")
+                if robust_metrics:
+                    print(f", RobustScore: {result['robustness_score']:.4f}", end="")
+                print()
+            
+            # Save per-config results
+            save_json(config_results, os.path.join(config_dir, 'cross_eval_results.json'))
+            all_results.extend(config_results)
     
     # Aggregate and save sweep summary
     print("\n" + "=" * 70)
