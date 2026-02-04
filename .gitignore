@@ -136,3 +136,13 @@ model_*.weights.h5
 *.zip
 *.tar.gz
 *.rar
+
+# Notebooks / scratch
+Checks.ipynb
+
+# Experiment outputs
+outputs/
+results/
+
+# Local CSV dumps
+sweep_results*.csv

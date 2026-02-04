@@ -2,7 +2,7 @@
 
 **Branch:** `feature/adversarial-generalization-sweep`  
 **Head Commit:** `99b000f`  
-**Generated:** 2026-02-04
+**Updated:** 2026-02-04
 
 ---
 
