@@ -1,0 +1,24 @@
+[
+  {
+    "config_name": "config_baseline",
+    "config": null,
+    "target_dataset": "AutomatedCMS_mZprime-2000_mDark-1_rinv-0.2_alpha-peak.h5",
+    "is_source": false,
+    "gen_auc": 0.5787651387992252,
+    "gen_pr_auc": 0.5096403534915279,
+    "sig_eff_at_1pct": 0.012911555842479019,
+    "stability_kl": 0.04348875394221047,
+    "stability_js": 0.008687167398236311
+  },
+  {
+    "config_name": "config_baseline",
+    "config": null,
+    "target_dataset": "AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5",
+    "is_source": true,
+    "gen_auc": 0.7696841087613293,
+    "gen_pr_auc": 0.736702187119977,
+    "sig_eff_at_1pct": 0.09728096676737161,
+    "stability_kl": 0.0,
+    "stability_js": 0.0
+  }
+]

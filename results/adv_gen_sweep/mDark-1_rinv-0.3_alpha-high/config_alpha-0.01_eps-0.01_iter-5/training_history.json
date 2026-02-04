@@ -1,0 +1,11 @@
+{
+  "config": {
+    "alpha": 0.01,
+    "grad_eps": 0.01,
+    "grad_iter": 5,
+    "grad_eta": 0.01
+  },
+  "epochs_run": 0,
+  "training_time": 19.88819694519043,
+  "final_val_auc": null
+}

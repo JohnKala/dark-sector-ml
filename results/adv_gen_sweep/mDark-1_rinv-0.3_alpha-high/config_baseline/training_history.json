@@ -1,0 +1,6 @@
+{
+  "config": null,
+  "epochs_run": 1,
+  "training_time": 7.116118669509888,
+  "final_val_auc": 0.763441264629364
+}
