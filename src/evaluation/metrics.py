@@ -229,6 +229,15 @@ def calculate_efficiency_ratio(
     bg_mask = (y_true == 0)
     sig_mask = (y_true == 1)
     
+    # Safety check: Ensure we have both signal and background
+    if np.sum(bg_mask) == 0 or np.sum(sig_mask) == 0:
+        return {
+            'sig_eff_a': 0.0,
+            'sig_eff_b': 0.0,
+            'ratio': 0.0,
+            'target_bg_eff': target_bg_eff
+        }
+    
     # Model A
     bg_preds_a = y_pred_proba_a[bg_mask]
     sig_preds_a = y_pred_proba_a[sig_mask]

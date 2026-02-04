@@ -38,7 +38,13 @@ def plot_feature_shift(
         
     # Remove padding (assuming <= -900 padding for masked particles)
     # A simple heuristic: if pT (index 0) is <= -900, it's padding
+    # Note: We use a safe threshold that works for both raw (-999) and normalized (approx -999) padding
     mask = clean_flat[:, 0] > -900
+    
+    if np.sum(mask) == 0:
+        print("Warning: All particles masked out in plot_feature_shift. Check padding value.")
+        return
+
     clean_flat = clean_flat[mask]
     pert_flat = pert_flat[mask]
     

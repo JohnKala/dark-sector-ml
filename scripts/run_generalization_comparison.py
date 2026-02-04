@@ -39,15 +39,14 @@ from src.evaluation.metrics import evaluate_model, calculate_efficiency_ratio, c
 from src.visualization.comparison_plots import plot_feature_shift, plot_prediction_shift, plot_delta_heatmap
 from src.models.adversarial import AdversarialExampleGenerator
 
-# Champion Hyperparameters (Hardcoded for consistency in this study)
-ADV_CONFIG = {
+# Default Champion Hyperparameters (can be overridden)
+DEFAULT_ADV_CONFIG = {
     'alpha': 0.05,
     'grad_eps': 0.1,
     'grad_iter': 10,
-    'grad_eta': 0.025  # 2.5 * 0.1 / 10
+    'grad_eta': 0.025
 }
-BATCH_SIZE = 128  # Winner of fine-tuning
-
+BATCH_SIZE = 128
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run Generalization Comparison Study')
@@ -56,6 +55,12 @@ def parse_args():
     parser.add_argument('--output_dir', type=str, default='results/generalization', help='Directory to save results')
     parser.add_argument('--epochs', type=int, default=50, help='Training epochs')
     parser.add_argument('--quick_run', action='store_true', help='Run in fast debug mode (1 epoch, fewer datasets)')
+    
+    # Adversarial Hyperparameters
+    parser.add_argument('--alpha', type=float, default=DEFAULT_ADV_CONFIG['alpha'], help='Adversarial loss weight')
+    parser.add_argument('--epsilon', type=float, default=DEFAULT_ADV_CONFIG['grad_eps'], help='Perturbation budget')
+    parser.add_argument('--grad_iter', type=int, default=DEFAULT_ADV_CONFIG['grad_iter'], help='Number of attack steps')
+    
     return parser.parse_args()
 
 
