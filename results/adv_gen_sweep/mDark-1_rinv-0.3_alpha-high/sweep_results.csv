@@ -1,7 +1,0 @@
-config_name,config,target_dataset,is_source,gen_auc,gen_pr_auc,sig_eff_at_1pct,stability_kl,stability_js
-config_baseline,,AutomatedCMS_mZprime-2000_mDark-1_rinv-0.2_alpha-peak.h5,False,0.5787651387992252,0.5096403534915279,0.012911555842479019,0.04348875394221047,0.008687167398236311
-config_baseline,,AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5,True,0.7696841087613293,0.736702187119977,0.09728096676737161,0.0,0.0
-config_alpha-0.01_eps-0.01_iter-5,"{'alpha': 0.01, 'grad_eps': 0.01, 'grad_iter': 5, 'grad_eta': 0.01}",AutomatedCMS_mZprime-2000_mDark-1_rinv-0.2_alpha-peak.h5,False,0.5930336130837099,0.5254115364144676,0.022595222724338282,0.07229730396277717,0.014060425427579348
-config_alpha-0.01_eps-0.01_iter-5,"{'alpha': 0.01, 'grad_eps': 0.01, 'grad_iter': 5, 'grad_eta': 0.01}",AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5,True,0.7988547029204431,0.7653157905265965,0.09667673716012085,0.0,0.0
-config_alpha-0.01_eps-0.1_iter-5,"{'alpha': 0.01, 'grad_eps': 0.1, 'grad_iter': 5, 'grad_eta': 0.025}",AutomatedCMS_mZprime-2000_mDark-1_rinv-0.2_alpha-peak.h5,False,0.5958006455777921,0.535073285428536,0.028405422853453842,0.05293436447737049,0.011876184496677608
-config_alpha-0.01_eps-0.1_iter-5,"{'alpha': 0.01, 'grad_eps': 0.1, 'grad_iter': 5, 'grad_eta': 0.025}",AutomatedCMS_mZprime-2000_mDark-1_rinv-0.3_alpha-high.h5,True,0.8041912588116817,0.780466620619902,0.1299093655589124,0.0,0.0

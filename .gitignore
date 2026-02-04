@@ -146,3 +146,4 @@ results/
 
 # Local CSV dumps
 sweep_results*.csv
+results/adv_gen_sweep/
