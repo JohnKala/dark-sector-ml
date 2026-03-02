@@ -50,7 +50,7 @@ dark-sector-ml/
 
 ## 2. Artifact Catalog
 
-### 2.1 `results/adv_gen_sweep/{source_name}/` (YOUR UNTRACKED DIR)
+### 2.1 `results/adv_gen_sweep/{source_name}/` (UNTRACKED DIR)
 
 | File | Format | Producer | Content |
 |------|--------|----------|---------|

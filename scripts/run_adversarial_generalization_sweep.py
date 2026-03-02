@@ -60,40 +60,37 @@ from src.evaluation.robustness import RobustnessEvaluator
 # =============================================================================
 # DEFAULT SWEEP CONFIGURATIONS
 # =============================================================================
-# These represent a range from no adversarial training to very strong adversarial training.
-# The configs are designed to answer: "How does adversarial strength affect generalization?"
+# Phase 1 Grid Search (per professor's specification - March 2026)
+# Grid: alpha=[0.2, 1.0, 5.0] x epsilon=[0.1, 0.5] x iterations=[10, 20]
+# Total: 1 baseline + 12 adversarial = 13 configs
 
 DEFAULT_SWEEP_CONFIGS = [
     # Baseline (no adversarial training) - CONTROL GROUP
     None,
     
-    # Weak adversarial (minimal perturbation)
-    {'alpha': 0.01, 'grad_eps': 0.01, 'grad_iter': 5,  'grad_eta': 0.01},
+    # =========================================================================
+    # alpha=0.2 (WEAK adversary)
+    # =========================================================================
+    {'alpha': 0.2, 'grad_eps': 0.1, 'grad_iter': 10, 'grad_eta': 0.02},
+    {'alpha': 0.2, 'grad_eps': 0.1, 'grad_iter': 20, 'grad_eta': 0.02},
+    {'alpha': 0.2, 'grad_eps': 0.5, 'grad_iter': 10, 'grad_eta': 0.10},
+    {'alpha': 0.2, 'grad_eps': 0.5, 'grad_iter': 20, 'grad_eta': 0.10},
     
-    # Medium-weak
-    {'alpha': 0.01, 'grad_eps': 0.1,  'grad_iter': 5,  'grad_eta': 0.025},
-    {'alpha': 0.05, 'grad_eps': 0.1,  'grad_iter': 5,  'grad_eta': 0.025},
+    # =========================================================================
+    # alpha=1.0 (MEDIUM adversary)
+    # =========================================================================
+    {'alpha': 1.0, 'grad_eps': 0.1, 'grad_iter': 10, 'grad_eta': 0.02},
+    {'alpha': 1.0, 'grad_eps': 0.1, 'grad_iter': 20, 'grad_eta': 0.02},
+    {'alpha': 1.0, 'grad_eps': 0.5, 'grad_iter': 10, 'grad_eta': 0.10},
+    {'alpha': 1.0, 'grad_eps': 0.5, 'grad_iter': 20, 'grad_eta': 0.10},
     
-    # Medium (similar to previous "champion" config)
-    {'alpha': 0.05, 'grad_eps': 0.1,  'grad_iter': 10, 'grad_eta': 0.025},
-    
-    # Medium-strong
-    {'alpha': 0.1,  'grad_eps': 0.1,  'grad_iter': 10, 'grad_eta': 0.025},
-    {'alpha': 0.1,  'grad_eps': 0.1,  'grad_iter': 20, 'grad_eta': 0.025},
-    
-    # Strong adversarial (aggressive perturbation)
-    {'alpha': 0.1,  'grad_eps': 0.5,  'grad_iter': 10, 'grad_eta': 0.05},
-    {'alpha': 0.5,  'grad_eps': 0.1,  'grad_iter': 10, 'grad_eta': 0.025},
-    {'alpha': 0.5,  'grad_eps': 0.5,  'grad_iter': 20, 'grad_eta': 0.05},
-    
-    # Very strong (extreme regularization)
-    {'alpha': 1.0,  'grad_eps': 0.5,  'grad_iter': 20, 'grad_eta': 0.05},
-    
-    # Ablation: High alpha, low perturbation (tests KL penalty alone)
-    {'alpha': 0.5,  'grad_eps': 0.01, 'grad_iter': 10, 'grad_eta': 0.01},
-    
-    # Ablation: Low alpha, high perturbation (tests perturbation alone)
-    {'alpha': 0.01, 'grad_eps': 0.5,  'grad_iter': 20, 'grad_eta': 0.05},
+    # =========================================================================
+    # alpha=5.0 (STRONG adversary)
+    # =========================================================================
+    {'alpha': 5.0, 'grad_eps': 0.1, 'grad_iter': 10, 'grad_eta': 0.02},
+    {'alpha': 5.0, 'grad_eps': 0.1, 'grad_iter': 20, 'grad_eta': 0.02},
+    {'alpha': 5.0, 'grad_eps': 0.5, 'grad_iter': 10, 'grad_eta': 0.10},
+    {'alpha': 5.0, 'grad_eps': 0.5, 'grad_iter': 20, 'grad_eta': 0.10},
 ]
 
 
