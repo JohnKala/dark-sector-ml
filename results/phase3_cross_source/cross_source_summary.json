@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-03-23T11:52:27.588258",
+  "num_sources": 6,
+  "num_configs": 3,
+  "total_evaluations": 108,
+  "config_rankings": [
+    {
+      "config_name": "baseline",
+      "num_sources": 6,
+      "global_mean_auc": 0.6493784367684361,
+      "global_std_across_sources": 0.06129162192928861,
+      "global_min_auc": 0.32436831606595656,
+      "global_mean_min_auc": 0.4904374199059403,
+      "mean_min_to_mean_ratio": 0.7460628484422477,
+      "cross_mDark_mean_auc": 0.5447374798721741,
+      "cross_mDark_min_auc": 0.32436831606595656,
+      "per_source": {
+        "mDark-1_rinv-0.8_alpha-peak": {
+          "mean_auc": 0.6699212199611555,
+          "min_auc": 0.5311673757253761,
+          "std_auc": 0.10449358423219307
+        },
+        "mDark-1_rinv-0.3_alpha-high": {
+          "mean_auc": 0.6774390723735525,
+          "min_auc": 0.5062880422361079,
+          "std_auc": 0.11869800820925748
+        },
+        "mDark-5_rinv-0.3_alpha-peak": {
+          "mean_auc": 0.5283205870374278,
+          "min_auc": 0.32436831606595656,
+          "std_auc": 0.11819967081869043
+        },
+        "mDark-1_rinv-0.3_alpha-peak": {
+          "mean_auc": 0.7160843829908029,
+          "min_auc": 0.645341824991488,
+          "std_auc": 0.045917423829781354
+        },
+        "mDark-1_rinv-0.3_alpha-low": {
+          "mean_auc": 0.6190159259782693,
+          "min_auc": 0.35946420824005076,
+          "std_auc": 0.17701817606658993
+        },
+        "mDark-1_rinv-0.2_alpha-peak": {
+          "mean_auc": 0.6854894322694083,
+          "min_auc": 0.5759947521766623,
+          "std_auc": 0.05655618256467968
+        }
+      }
+    },
+    {
+      "config_name": "best_avg_alpha-0.2",
+      "num_sources": 6,
+      "global_mean_auc": 0.6009076503019216,
+      "global_std_across_sources": 0.05591940214750744,
+      "global_min_auc": 0.36524835098740266,
+      "global_mean_min_auc": 0.48960228284007384,
+      "mean_min_to_mean_ratio": 0.8076598794282956,
+      "cross_mDark_mean_auc": 0.5523843802475117,
+      "cross_mDark_min_auc": 0.36524835098740266,
+      "per_source": {
+        "mDark-1_rinv-0.8_alpha-peak": {
+          "mean_auc": 0.6247462707265906,
+          "min_auc": 0.5418716900012251,
+          "std_auc": 0.07459439125324689
+        },
+        "mDark-1_rinv-0.3_alpha-high": {
+          "mean_auc": 0.6536777542718667,
+          "min_auc": 0.5802926628128445,
+          "std_auc": 0.06131572161343774
+        },
+        "mDark-5_rinv-0.3_alpha-peak": {
+          "mean_auc": 0.5466243049866194,
+          "min_auc": 0.3684793812928644,
+          "std_auc": 0.0930118155182382
+        },
+        "mDark-1_rinv-0.3_alpha-peak": {
+          "mean_auc": 0.6606526843432883,
+          "min_auc": 0.5828283155795515,
+          "std_auc": 0.051167541034405385
+        },
+        "mDark-1_rinv-0.3_alpha-low": {
+          "mean_auc": 0.5073130178679397,
+          "min_auc": 0.36524835098740266,
+          "std_auc": 0.09209062074515255
+        },
+        "mDark-1_rinv-0.2_alpha-peak": {
+          "mean_auc": 0.612431869615225,
+          "min_auc": 0.4988932963665548,
+          "std_auc": 0.06315273784979338
+        }
+      }
+    },
+    {
+      "config_name": "best_min_alpha-5.0",
+      "num_sources": 6,
+      "global_mean_auc": 0.5897538822916203,
+      "global_std_across_sources": 0.04008904808626499,
+      "global_min_auc": 0.3730911581302593,
+      "global_mean_min_auc": 0.48714115685523735,
+      "mean_min_to_mean_ratio": 0.8224169645917371,
+      "cross_mDark_mean_auc": 0.5619373691320912,
+      "cross_mDark_min_auc": 0.3730911581302593,
+      "per_source": {
+        "mDark-1_rinv-0.8_alpha-peak": {
+          "mean_auc": 0.603163664936073,
+          "min_auc": 0.5473429383724888,
+          "std_auc": 0.04805826257898253
+        },
+        "mDark-1_rinv-0.3_alpha-high": {
+          "mean_auc": 0.6395860093675401,
+          "min_auc": 0.5876553827647275,
+          "std_auc": 0.04936100540325062
+        },
+        "mDark-5_rinv-0.3_alpha-peak": {
+          "mean_auc": 0.5511620358438487,
+          "min_auc": 0.3730911581302593,
+          "std_auc": 0.09028564313087101
+        },
+        "mDark-1_rinv-0.3_alpha-peak": {
+          "mean_auc": 0.6236572152682186,
+          "min_auc": 0.4903257176905491,
+          "std_auc": 0.07190538364455501
+        },
+        "mDark-1_rinv-0.3_alpha-low": {
+          "mean_auc": 0.5242369386244835,
+          "min_auc": 0.4139833911406645,
+          "std_auc": 0.06578556002888879
+        },
+        "mDark-1_rinv-0.2_alpha-peak": {
+          "mean_auc": 0.596717429709558,
+          "min_auc": 0.5104483530327351,
+          "std_auc": 0.05898920741915902
+        }
+      }
+    }
+  ],
+  "total_time_seconds": 20857.907650709152,
+  "args": {
+    "epochs": 50,
+    "batch_size": 256,
+    "eval_robustness": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "alpha": 5.0,
+    "grad_eps": 0.1,
+    "grad_iter": 10,
+    "grad_eta": 0.02
+  },
+  "config_name": "best_min_alpha-5.0",
+  "source": "mDark-1_rinv-0.2_alpha-peak",
+  "epochs_run": 18,
+  "training_time": 839.9027531147003,
+  "final_val_metric": "0.6991716"
+}

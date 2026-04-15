@@ -1,0 +1,8 @@
+{
+  "config": null,
+  "config_name": "baseline",
+  "source": "mDark-1_rinv-0.8_alpha-peak",
+  "epochs_run": 50,
+  "training_time": 503.7997422218323,
+  "final_val_metric": 0.3735099136829376
+}

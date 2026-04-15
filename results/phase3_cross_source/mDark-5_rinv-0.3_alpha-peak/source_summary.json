@@ -1,0 +1,48 @@
+{
+  "source": "mDark-5_rinv-0.3_alpha-peak",
+  "generated_at": "2026-03-23T11:52:26.977225",
+  "configs": {
+    "baseline": {
+      "mean_gen_auc_unseen": 0.5283205870374278,
+      "min_gen_auc": 0.32436831606595656,
+      "std_gen_auc": 0.11819967081869043,
+      "min_to_mean_ratio": 0.6139611516652432,
+      "generalization_gap": 0.2662228865260211,
+      "source_auc": 0.7945434735634489,
+      "cross_mDark_auc": 0.5283205870374278,
+      "cross_mDark_min": 0.32436831606595656,
+      "same_mDark_mean": null,
+      "same_mDark_std": null,
+      "mean_robustness": 1.044198837831879,
+      "num_targets": 5
+    },
+    "best_avg_alpha-0.2": {
+      "mean_gen_auc_unseen": 0.5466243049866194,
+      "min_gen_auc": 0.3684793812928644,
+      "std_gen_auc": 0.0930118155182382,
+      "min_to_mean_ratio": 0.6740998852985219,
+      "generalization_gap": 0.17861148610503708,
+      "source_auc": 0.7252357910916565,
+      "cross_mDark_auc": 0.5466243049866194,
+      "cross_mDark_min": 0.3684793812928644,
+      "same_mDark_mean": null,
+      "same_mDark_std": null,
+      "mean_robustness": 1.0620131493452851,
+      "num_targets": 5
+    },
+    "best_min_alpha-5.0": {
+      "mean_gen_auc_unseen": 0.5511620358438487,
+      "min_gen_auc": 0.3730911581302593,
+      "std_gen_auc": 0.09028564313087101,
+      "min_to_mean_ratio": 0.6769173743235842,
+      "generalization_gap": 0.16090955925979245,
+      "source_auc": 0.7120715951036412,
+      "cross_mDark_auc": 0.5511620358438487,
+      "cross_mDark_min": 0.3730911581302593,
+      "same_mDark_mean": null,
+      "same_mDark_std": null,
+      "mean_robustness": 0.9764107503526819,
+      "num_targets": 5
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "config": null,
+  "epochs_run": 50,
+  "training_time": 456.14782094955444,
+  "final_val_metric": 0.3950006067752838,
+  "best_val_loss": null
+}

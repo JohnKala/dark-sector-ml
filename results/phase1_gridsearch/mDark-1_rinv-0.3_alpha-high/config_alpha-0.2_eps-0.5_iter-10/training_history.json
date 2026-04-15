@@ -1,0 +1,12 @@
+{
+  "config": {
+    "alpha": 0.2,
+    "grad_eps": 0.5,
+    "grad_iter": 10,
+    "grad_eta": 0.1
+  },
+  "epochs_run": 13,
+  "training_time": 813.8586990833282,
+  "final_val_metric": "1.1643013",
+  "best_val_loss": "0.4898943"
+}

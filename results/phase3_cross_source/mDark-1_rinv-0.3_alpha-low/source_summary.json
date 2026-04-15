@@ -1,0 +1,48 @@
+{
+  "source": "mDark-1_rinv-0.3_alpha-low",
+  "generated_at": "2026-03-23T08:41:55.861006",
+  "configs": {
+    "baseline": {
+      "mean_gen_auc_unseen": 0.6190159259782693,
+      "min_gen_auc": 0.35946420824005076,
+      "std_gen_auc": 0.17701817606658993,
+      "min_to_mean_ratio": 0.580702681715284,
+      "generalization_gap": 0.26008515870483784,
+      "source_auc": 0.8791010846831071,
+      "cross_mDark_auc": 0.35946420824005076,
+      "cross_mDark_min": 0.35946420824005076,
+      "same_mDark_mean": 0.6839038554128238,
+      "same_mDark_std": 0.13459968941609446,
+      "mean_robustness": 1.0049699993457968,
+      "num_targets": 5
+    },
+    "best_avg_alpha-0.2": {
+      "mean_gen_auc_unseen": 0.5073130178679397,
+      "min_gen_auc": 0.36524835098740266,
+      "std_gen_auc": 0.09209062074515255,
+      "min_to_mean_ratio": 0.7199664469924595,
+      "generalization_gap": 0.2600853619170693,
+      "source_auc": 0.767398379785009,
+      "cross_mDark_auc": 0.36524835098740266,
+      "cross_mDark_min": 0.36524835098740266,
+      "same_mDark_mean": 0.542829184588074,
+      "same_mDark_std": 0.06552757086961587,
+      "mean_robustness": 1.1581633428170035,
+      "num_targets": 5
+    },
+    "best_min_alpha-5.0": {
+      "mean_gen_auc_unseen": 0.5242369386244835,
+      "min_gen_auc": 0.4139833911406645,
+      "std_gen_auc": 0.06578556002888879,
+      "min_to_mean_ratio": 0.7896875642279095,
+      "generalization_gap": 0.18992603671478392,
+      "source_auc": 0.7141629753392674,
+      "cross_mDark_auc": 0.4139833911406645,
+      "cross_mDark_min": 0.4139833911406645,
+      "same_mDark_mean": 0.5518003254954382,
+      "same_mDark_std": 0.04013693319629144,
+      "mean_robustness": 1.0781508801729174,
+      "num_targets": 5
+    }
+  }
+}
